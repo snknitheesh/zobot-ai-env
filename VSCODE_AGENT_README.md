@@ -21,7 +21,7 @@
 - `cr h` - Show help
 
 #### Requirements Management
-- `req update` - Update all requirements from requirements/ folder
+- `req update` - Update all requirements from .requirements/ folder
 - `req help` - Show requirements help
 
 #### Navigation Aliases
@@ -42,7 +42,7 @@
 ├── zobot_ws/                 # Main workspace (mounted from host)
 │   ├── ros/                  # ROS packages
 │   ├── bin/                  # Scripts and tools
-│   ├── requirements/         # Requirement files
+│   ├── .requirements/         # Requirement files
 │   └── mount/               # External volume mount point
 ├── .ros_builds/             # Hidden build directory (container-only)
 │   ├── build/
@@ -60,7 +60,7 @@
    - Use `cr ba` to build all packages
 
 2. **Managing Dependencies**
-   - Update `requirements/additional_*.txt` files
+   - Update `.requirements/additional_*.txt` files
    - Run `req update` to install new requirements
    - Always test after dependency changes
 
@@ -103,7 +103,7 @@ cr b my_package
 #### Adding Python Dependencies
 ```bash
 # Edit requirements/additional_pip_requirements.txt
-nano /home/zozo/zobot_ws/requirements/additional_pip_requirements.txt
+nano /home/zozo/zobot_ws/.requirements/additional_pip_requirements.txt
 # Then update
 req update
 ```

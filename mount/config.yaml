@@ -1,0 +1,49 @@
+# Road Anomaly Detection VAE - Preprocessing Configuration
+# Copy your preferred configuration from debug mode output here
+
+preprocessing:
+  # Example configurations - update these based on your testing
+  
+  # No preprocessing
+  none:
+    apply_masking: false
+    remove_sky: false
+    road_focus: false
+    enhance_contrast: false
+  
+  # Basic contrast enhancement only
+  basic:
+    apply_masking: false
+    remove_sky: false
+    road_focus: false
+    enhance_contrast: true
+  
+  # Road focus with semantic masking
+  road_focus:
+    apply_masking: true
+    mask_type: semantic
+    remove_sky: true
+    road_focus: true
+    enhance_contrast: true
+  
+  # Advanced preprocessing
+  advanced:
+    apply_masking: true
+    mask_type: semantic
+    remove_sky: true
+    road_focus: true
+    enhance_contrast: true
+
+# Add your custom configurations here after testing in debug mode
+# Example:
+  apply_masking_mask_t:
+      apply_masking: true
+      mask_type: semantic
+      remove_sky: true
+      road_focus: true
+      enhance_contrast: true
+      normalize: true
+      resize: true
+
+# To use a configuration, specify its name when running the main script
+# The system will look for configurations in this file

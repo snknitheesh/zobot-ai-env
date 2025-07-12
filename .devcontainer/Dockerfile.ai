@@ -79,9 +79,9 @@ RUN echo 'export PATH="/home/zozo/.anaconda/bin:$PATH"' >> /etc/environment && \
 #################################################################################################################################
 FROM conda-builder AS requirements-builder
 
-COPY requirements/additional_ros_requirements.txt /tmp/additional_ros_requirements.txt
-COPY requirements/additional_pip_requirements.txt /tmp/additional_pip_requirements.txt
-COPY requirements/additional_deb_requirements.txt /tmp/additional_deb_requirements.txt
+COPY .requirements/additional_ros_requirements.txt /tmp/additional_ros_requirements.txt
+COPY .requirements/additional_pip_requirements.txt /tmp/additional_pip_requirements.txt
+COPY .requirements/additional_deb_requirements.txt /tmp/additional_deb_requirements.txt
 
 RUN --mount=type=cache,target=/var/cache/apt \
     if [ -s /tmp/additional_ros_requirements.txt ]; then \
@@ -118,12 +118,12 @@ RUN mkdir -p $ZOBOT_WS && \
     chown -R $USERNAME:$USERNAME /home/zozo
 
 # Copy configuration files
-COPY bin/ubuntu_bashrc /home/zozo/.bashrc
-COPY bin/alias.sh /home/zozo/zobot_ws/bin/alias.sh
-COPY bin/colcon_runner.py /home/zozo/zobot_ws/bin/colcon_runner.py
-COPY bin/colcon_defaults.yaml /home/zozo/zobot_ws/bin/colcon_defaults.yaml
+COPY .bin/ubuntu_bashrc /home/zozo/.bashrc
+COPY .bin/alias.sh /home/zozo/zobot_ws/.bin/alias.sh
+COPY .bin/colcon_runner.py /home/zozo/zobot_ws/.bin/colcon_runner.py
+COPY .bin/colcon_defaults.yaml /home/zozo/zobot_ws/.bin/colcon_defaults.yaml
 RUN chown -R $USERNAME:$USERNAME /home/zozo && \
-    chmod +x /home/zozo/zobot_ws/bin/colcon_runner.py
+    chmod +x /home/zozo/zobot_ws/.bin/colcon_runner.py
 
 # ROS environment setup
 ENV ROS_DISTRO=${ROS_DISTRO}
@@ -137,8 +137,8 @@ ENV MAX_JOBS=8
 USER $USERNAME
 WORKDIR $ZOBOT_WS
 
-RUN echo 'source /home/zozo/zobot_ws/bin/alias.sh' >> /home/zozo/.bashrc && \
-    echo 'export PATH="/home/zozo/.anaconda/bin:$PATH"' >> /home/zozo/.bashrc && \
+RUN echo 'source /home/zozo/zobot_ws/.bin/alias.sh' >> /home/zozo/.bashrc && \
+    echo 'export PATH="/home/zozo/.anaconda/.bin:$PATH"' >> /home/zozo/.bashrc && \
     echo 'export CONDA_AUTO_ACTIVATE_BASE=false' >> /home/zozo/.bashrc
 
 #################################################################################################################################

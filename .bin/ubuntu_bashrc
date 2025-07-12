@@ -118,7 +118,7 @@ export PURPLE='\033[0;35m'
 export NC='\033[0m' # No Color
 
 # Environment variables
-export PATH=$PATH:/home/zozo/zobot_ws/bin
+export PATH=$PATH:/home/zozo/zobot_ws/.bin
 export PYTHONDONTWRITEBYTECODE=1
 export RCUTILS_CONSOLE_OUTPUT_FORMAT="[{severity}]: {message}"
 export RCUTILS_COLORIZED_OUTPUT=1
@@ -156,6 +156,10 @@ activate_conda() {
     fi
 }
 
+# Git configs hardcoded
+git config --global user.email "snknitheesh@gmail.com"
+git config --global user.name "Snknitheesh"
+
 # Alias for conda activation
 alias ca='activate_conda'
 
@@ -176,6 +180,6 @@ for setup_file in "/opt/ros/${ROS_DISTRO:-humble}/setup.bash" "/home/zozo/.ros_b
 done
 
 # Load custom aliases and functions
-if [ -f "/home/zozo/zobot_ws/bin/alias.sh" ]; then
-    source "/home/zozo/zobot_ws/bin/alias.sh"
+if [ -f "/home/zozo/zobot_ws/.bin/alias.sh" ]; then
+    source "/home/zozo/zobot_ws/.bin/alias.sh"
 fi

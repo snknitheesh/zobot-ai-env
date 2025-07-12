@@ -17,7 +17,7 @@ class Colors:
     YELLOW = '\033[1;33m'
     RED = '\033[0;31m'
     BOLD = '\033[1m'
-    NC = '\033[0m'  # No Color
+    NC = '\033[0m'  
 
 class ColconRunner:
     def __init__(self):
@@ -32,7 +32,7 @@ class ColconRunner:
         self.home_dir = Path.home()
         self.ros_folder = self.workspace_dir / "ros"
         self.build_dir = self.home_dir / ".ros_builds"
-        self.colcon_defaults = self.workspace_dir / "bin" / "colcon_defaults.yaml"
+        self.colcon_defaults = self.workspace_dir / ".bin" / "colcon_defaults.yaml"
         
         self.workspace_dir.mkdir(exist_ok=True)
         self.build_dir.mkdir(exist_ok=True)
@@ -86,7 +86,6 @@ class ColconRunner:
     def build_packages(self, packages: List[str] = None, test_mode: bool = False):
         """Build specified packages or all packages"""
         if packages:
-            # Validate packages exist
             available_packages = self.get_packages()
             invalid_packages = [pkg for pkg in packages if pkg not in available_packages]
             if invalid_packages:
@@ -99,7 +98,6 @@ class ColconRunner:
             package_args = []
             self.print_colored("Building all packages", Colors.GREEN)
         
-        # Build command
         build_cmd = [
             "colcon", "build",
             "--symlink-install",
@@ -111,14 +109,12 @@ class ColconRunner:
             "--log-base", str(self.build_dir / "log")
         ] + package_args
         
-        # Run build
         result = self.run_command(build_cmd)
         
         if result == 0:
             self.print_colored("Build successful!", Colors.GREEN)
             self.print_colored("Sourcing workspace...", Colors.YELLOW)
             
-            # Source the workspace (for the current shell session)
             setup_path = self.build_dir / "install" / "setup.bash"
             if setup_path.exists():
                 self.print_colored(f"Run: source {setup_path}", Colors.CYAN)
@@ -136,7 +132,6 @@ class ColconRunner:
             package_args = []
             self.print_colored("Testing all packages", Colors.GREEN)
         
-        # Test command
         test_cmd = [
             "colcon", "test",
             "--base-paths", str(self.ros_folder),
@@ -147,7 +142,6 @@ class ColconRunner:
         
         result = self.run_command(test_cmd)
         
-        # Show test results
         if result == 0:
             result_cmd = [
                 "colcon", "test-result", "--verbose",
@@ -161,7 +155,6 @@ class ColconRunner:
         """Clean all build artifacts"""
         self.print_colored("Cleaning build artifacts...", Colors.YELLOW)
         
-        # Remove build contents but keep the directory
         for item in self.build_dir.iterdir():
             if item.is_dir():
                 subprocess.run(["rm", "-rf", str(item)], check=False)

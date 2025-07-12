@@ -8,7 +8,7 @@ RED='\033[0;31m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-REQUIREMENTS_DIR="/home/zozo/zobot_ws/requirements"
+REQUIREMENTS_DIR="/home/zozo/zobot_ws/.requirements"
 
 update_requirements() {
     echo -e "${CYAN}🔄 Updating requirements inside container...${NC}"

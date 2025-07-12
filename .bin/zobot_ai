@@ -116,7 +116,7 @@ start_container() {
             echo -e "${RED}Mount path does not exist: $mount_vol${NC}"
             exit 1
         fi
-        mount_args="-v $mount_vol:/home/zozo/mount"
+        mount_args="-v $mount_vol:/home/zozo/zobot_ws/mount"
     fi
     
     local ros_domain_id=${ROS_DOMAIN_ID:-0}
@@ -144,6 +144,7 @@ start_container() {
             --volume "$HOME/.ssh:/home/zozo/.ssh:ro" \
             --volume "/mnt/cave:/home/zozo/cave:rw" \
             --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
+            --volume "/mnt/cave/.conda:/home/zozo/.conda:rw" \
             $mount_args \
             "$image_tag" \
             tail -f /dev/null
@@ -169,6 +170,7 @@ start_container() {
             --volume "$HOME/.ssh:/home/zozo/.ssh:ro" \
             --volume "/mnt/cave:/home/zozo/cave:rw" \
             --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
+            --volume "/mnt/cave/.conda:/home/zozo/.conda:rw" \
             $mount_args \
             "$image_tag" \
             tail -f /dev/null

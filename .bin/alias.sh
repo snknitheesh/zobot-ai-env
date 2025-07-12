@@ -4,9 +4,9 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
 
-alias cr="python3 /home/zozo/zobot_ws/bin/colcon_runner.py"
-alias req="/home/zozo/zobot_ws/bin/req"
-WORKSPACE_BIN="/home/zozo/zobot_ws/bin"
+alias cr="python3 /home/zozo/zobot_ws/.bin/colcon_runner.py"
+alias req="/home/zozo/zobot_ws/.bin/req"
+WORKSPACE_BIN="/home/zozo/zobot_ws/.bin"
 
 
 # Colcon commands

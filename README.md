@@ -69,7 +69,7 @@ A robust, optimized Docker-based development environment for robotics developmen
 │   │   ├── colcon_runner.py  # Advanced colcon wrapper
 │   │   ├── req               # Requirements manager
 │   │   └── alias.sh          # Useful aliases
-│   ├── requirements/         # Requirements files
+│   ├── .requirements/        # Requirements files
 │   │   ├── additional_pip_requirements.txt
 │   │   ├── additional_deb_requirements.txt
 │   │   └── additional_ros_requirements.txt
@@ -101,7 +101,7 @@ cr b my_package
 ### 2. Managing Dependencies
 ```bash
 # Edit requirements files
-nano /home/zozo/zobot_ws/requirements/additional_pip_requirements.txt
+nano /home/zozo/zobot_ws/.requirements/additional_pip_requirements.txt
 
 # Update requirements inside container
 req update
