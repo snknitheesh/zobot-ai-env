@@ -147,14 +147,6 @@ The environment supports both ROS2 Humble and Jazzy:
 - PyTorch with CUDA 12.8 optimized for RTX 5090
 - CUDA toolkit available
 
-### Persistent Data
-- Main workspace is mounted from host
-- SSH keys are mounted read-only
-- Cave folder is mounted from `/mnt/cave`
-- Conda environments persist in container
-
-## 🛠️ Advanced Usage
-
 ### Custom Volume Mounting
 ```bash
 # Mount specific data directory
