@@ -1,0 +1,181 @@
+#!/bin/bash
+
+# ~/.bashrc: executed by bash(1) for non-login shells.
+# Enhanced bashrc for zobot-ai container environment
+
+# If not running interactively, don't do anything
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+
+# History configuration
+HISTCONTROL=ignoreboth
+shopt -s histappend
+HISTSIZE=1000
+HISTFILESIZE=2000
+
+# Window size check
+shopt -s checkwinsize
+
+# Make less more friendly for non-text input files
+[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
+
+# Set variable identifying the chroot you work in
+if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
+    debian_chroot=$(cat /etc/debian_chroot)
+fi
+
+# Enhanced prompt with robot emoji and colors
+case "$TERM" in
+    xterm-color|*-256color) color_prompt=yes;;
+esac
+
+# Force color prompt for better aesthetics
+force_color_prompt=yes
+
+if [ -n "$force_color_prompt" ]; then
+    if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
+        color_prompt=yes
+    else
+        color_prompt=
+    fi
+fi
+
+if [ "$color_prompt" = yes ]; then
+    # Cyan username, green hostname with robot emoji, blue path
+    PS1='${debian_chroot:+($debian_chroot)}\[\033[0;36m\]\u\[\033[00m\]@\[\033[0;32m\]\h\[\033[00m\]:\[\033[0;34m\]\w\[\033[00m\]\$ '
+else
+    PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
+fi
+unset color_prompt force_color_prompt
+
+# Terminal title with robot emoji
+case "$TERM" in
+xterm*|rxvt*)
+    PS1="\[\e]0;🤖 ZoBot AI - ${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
+    ;;
+esac
+
+# Color support for ls and grep
+if [ -x /usr/bin/dircolors ]; then
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+    alias ls='ls --color=auto'
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+fi
+
+# Useful aliases
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+alias ..='cd ..'
+alias ...='cd ../..'
+alias h='history'
+alias c='clear'
+
+# Git aliases
+alias gs='git status'
+alias ga='git add'
+alias gc='git commit'
+alias gp='git push'
+alias gl='git pull'
+alias gd='git diff'
+alias gb='git branch'
+alias gco='git checkout'
+
+# Navigation aliases
+alias cdros='cd /home/zozo/zobot_ws/ros'
+alias cdws='cd /home/zozo/zobot_ws'
+alias cdmount='cd /home/zozo/mount'
+alias cdcave='cd /home/zozo/cave'
+
+# Alert for long running commands
+alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+
+# Load bash aliases if they exist
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+
+# Programmable completion
+if ! shopt -oq posix; then
+  if [ -f /usr/share/bash-completion/bash_completion ]; then
+    . /usr/share/bash-completion/bash_completion
+  elif [ -f /etc/bash_completion ]; then
+    . /etc/bash_completion
+  fi
+fi
+
+# Color definitions for scripts
+export GREEN='\033[0;32m'
+export CYAN='\033[0;36m'
+export YELLOW='\033[1;33m'
+export RED='\033[0;31m'
+export BLUE='\033[0;34m'
+export PURPLE='\033[0;35m'
+export NC='\033[0m' # No Color
+
+# Environment variables
+export PATH=$PATH:/home/zozo/zobot_ws/bin
+export PYTHONDONTWRITEBYTECODE=1
+export RCUTILS_CONSOLE_OUTPUT_FORMAT="[{severity}]: {message}"
+export RCUTILS_COLORIZED_OUTPUT=1
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+export CARB_AUDIO_DISABLE=1
+export MAX_JOBS=$(nproc)
+
+# CUDA configuration
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+# Conda configuration
+export PATH="/home/zozo/.anaconda/bin:$PATH"
+export CONDA_AUTO_ACTIVATE_BASE=false
+
+# ROS Domain ID (should be set from host environment)
+export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+
+# Function to quickly activate conda environments
+activate_conda() {
+    if [ -z "$1" ]; then
+        conda env list 2>/dev/null || echo "Conda not available"
+        return 1
+    fi
+    
+    if command -v conda >/dev/null 2>&1; then
+        if conda env list | grep -q "^$1 "; then
+            conda activate "$1"
+        else
+            conda env list
+            return 1
+        fi
+    else
+        return 1
+    fi
+}
+
+# Alias for conda activation
+alias ca='activate_conda'
+
+# Welcome message
+if [ -t 1 ]; then
+    echo -e "${CYAN}🤖 Welcome to ZoBot AI Container${NC}"
+    echo -e "${GREEN}ROS Distribution: ${ROS_DISTRO:-humble}${NC}"
+    echo -e "${GREEN}ROS Domain ID: ${ROS_DOMAIN_ID}${NC}"
+    echo -e "${YELLOW}Type 'cr h' for colcon commands or 'req help' for requirements management${NC}"
+    echo -e "${CYAN}Quick navigation: rosws, ws, cdmount, cdcave${NC}"
+fi
+
+# Source ROS setup files
+for setup_file in "/opt/ros/${ROS_DISTRO:-humble}/setup.bash" "/home/zozo/.ros_builds/install/setup.bash"; do
+    if [ -f "$setup_file" ]; then
+        source "$setup_file"
+    fi
+done
+
+# Load custom aliases and functions
+if [ -f "/home/zozo/zobot_ws/bin/alias.sh" ]; then
+    source "/home/zozo/zobot_ws/bin/alias.sh"
+fi

@@ -1,0 +1,144 @@
+ARG ROS_DISTRO=jazzy
+ARG BASE_IMAGE_HUMBLE=rwthika/ros2-ml:humble
+ARG BASE_IMAGE_JAZZY=rwthika/ros2-ml:jazzy
+ARG BASE_IMAGE=${BASE_IMAGE_HUMBLE}
+
+#################################################################################################################################
+# UNDERLAY BUILD - Base system setup
+#################################################################################################################################
+FROM ${BASE_IMAGE} AS underlay-builder
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG ROS_DISTRO=humble
+
+# User configuration
+ENV USERNAME=zozo
+ENV USER_UID=1000
+ENV USER_GID=1000
+ENV HOME=/home/zozo
+ENV ZOBOT_WS=/home/zozo/zobot_ws
+
+# GPU and display configuration
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=all
+ENV DISPLAY=:0
+ENV QT_X11_NO_MITSHM=1
+
+# Sudo privileges
+RUN groupadd --gid $USER_GID $USERNAME && \
+    useradd --uid $USER_UID --gid $USER_GID -m $USERNAME -s /bin/bash && \
+    usermod -aG sudo $USERNAME && \
+    echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/nopasswd && \
+    chmod 0440 /etc/sudoers.d/nopasswd
+
+# Install essential system packages
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        wget \
+        git \
+        vim \
+        nano \
+        build-essential \
+        cmake \
+        pkg-config \
+        software-properties-common \
+        ca-certificates \
+        gnupg \
+        lsb-release \
+        sudo \
+        openssh-client \
+        htop \
+        tree \
+        unzip \
+        rsync \
+    && rm -rf /var/lib/apt/lists/*
+
+#################################################################################################################################
+# CONDA INSTALLATION 
+#################################################################################################################################
+FROM underlay-builder AS conda-builder
+
+USER $USERNAME
+WORKDIR /home/zozo
+
+RUN --mount=type=cache,target=/tmp/conda,uid=1000,gid=1000 \
+    wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/conda/miniconda.sh && \
+    bash /tmp/conda/miniconda.sh -b -p /home/zozo/.anaconda && \
+    rm -f /tmp/conda/miniconda.sh && \
+    /home/zozo/.anaconda/bin/conda clean -afy
+
+USER root
+
+RUN echo 'export PATH="/home/zozo/.anaconda/bin:$PATH"' >> /etc/environment && \
+    echo 'export CONDA_AUTO_ACTIVATE_BASE=false' >> /etc/environment
+
+#################################################################################################################################
+# REQUIREMENTS BUILDER 
+#################################################################################################################################
+FROM conda-builder AS requirements-builder
+
+COPY requirements/additional_ros_requirements.txt /tmp/additional_ros_requirements.txt
+COPY requirements/additional_pip_requirements.txt /tmp/additional_pip_requirements.txt
+COPY requirements/additional_deb_requirements.txt /tmp/additional_deb_requirements.txt
+
+RUN --mount=type=cache,target=/var/cache/apt \
+    if [ -s /tmp/additional_ros_requirements.txt ]; then \
+        apt-get update && \
+        grep -vE '^\s*#|^\s*$' /tmp/additional_ros_requirements.txt | xargs apt-get install -y && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
+RUN --mount=type=cache,target=/var/cache/apt \
+    if [ -s /tmp/additional_deb_requirements.txt ]; then \
+        apt-get update && \
+        grep -vE '^\s*#|^\s*$' /tmp/additional_deb_requirements.txt | xargs apt-get install -y && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip uninstall -y torch torchvision torchaudio && \
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    if [ -s /tmp/additional_pip_requirements.txt ]; then \
+        pip install -r /tmp/additional_pip_requirements.txt; \
+    fi
+
+#################################################################################################################################
+# OVERLAY BUILD
+#################################################################################################################################
+FROM requirements-builder AS overlay-builder
+
+RUN mkdir -p $ZOBOT_WS && \
+    mkdir -p /home/zozo/.ros_builds && \
+    mkdir -p /home/zozo/mount && \
+    mkdir -p /home/zozo/cave && \
+    chown -R $USERNAME:$USERNAME /home/zozo
+
+# Copy configuration files
+COPY bin/ubuntu_bashrc /home/zozo/.bashrc
+COPY bin/alias.sh /home/zozo/zobot_ws/bin/alias.sh
+COPY bin/colcon_runner.py /home/zozo/zobot_ws/bin/colcon_runner.py
+COPY bin/colcon_defaults.yaml /home/zozo/zobot_ws/bin/colcon_defaults.yaml
+RUN chown -R $USERNAME:$USERNAME /home/zozo && \
+    chmod +x /home/zozo/zobot_ws/bin/colcon_runner.py
+
+# ROS environment setup
+ENV ROS_DISTRO=${ROS_DISTRO}
+ENV RCUTILS_CONSOLE_OUTPUT_FORMAT="[{severity}]: {message}"
+ENV RCUTILS_COLORIZED_OUTPUT=1
+ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV CARB_AUDIO_DISABLE=1
+ENV MAX_JOBS=8
+
+USER $USERNAME
+WORKDIR $ZOBOT_WS
+
+RUN echo 'source /home/zozo/zobot_ws/bin/alias.sh' >> /home/zozo/.bashrc && \
+    echo 'export PATH="/home/zozo/.anaconda/bin:$PATH"' >> /home/zozo/.bashrc && \
+    echo 'export CONDA_AUTO_ACTIVATE_BASE=false' >> /home/zozo/.bashrc
+
+#################################################################################################################################

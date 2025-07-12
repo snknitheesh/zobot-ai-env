@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# Manage requirements inside container
+
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+REQUIREMENTS_DIR="/home/zozo/zobot_ws/requirements"
+
+update_requirements() {
+    echo -e "${CYAN}🔄 Updating requirements inside container...${NC}"
+    
+    if [ ! -d "$REQUIREMENTS_DIR" ]; then
+        echo -e "${RED}Requirements directory not found: $REQUIREMENTS_DIR${NC}"
+        exit 1
+    fi
+    
+    cd "$REQUIREMENTS_DIR" || exit 1
+    
+    if [ -f "additional_ros_requirements.txt" ]; then
+        echo -e "${YELLOW}Updating ROS requirements...${NC}"
+        if grep -vE '^\s*#|^\s*$' additional_ros_requirements.txt | wc -l > 0; then
+            sudo apt-get update
+            grep -vE '^\s*#|^\s*$' additional_ros_requirements.txt | xargs sudo apt-get install -y
+        fi
+    fi
+    
+    if [ -f "additional_deb_requirements.txt" ]; then
+        echo -e "${YELLOW}Updating deb requirements...${NC}"
+        if grep -vE '^\s*#|^\s*$' additional_deb_requirements.txt | wc -l > 0; then
+            sudo apt-get update
+            grep -vE '^\s*#|^\s*$' additional_deb_requirements.txt | xargs sudo apt-get install -y
+        fi
+    fi
+    
+    if [ -f "additional_pip_requirements.txt" ]; then
+        echo -e "${YELLOW}Updating pip requirements...${NC}"
+        if grep -vE '^\s*#|^\s*$' additional_pip_requirements.txt | wc -l > 0; then
+            pip install --upgrade pip
+            pip install -r additional_pip_requirements.txt --upgrade --force-reinstall
+        fi
+    fi
+    
+    sudo apt-get autoremove -y
+    sudo apt-get autoclean
+    
+    echo -e "${GREEN}Requirements updated successfully!${NC}"
+}
+
+show_help() {
+    echo -e "${CYAN}Requirements Manager${NC}"
+    echo ""
+    echo -e "${GREEN}Usage:${NC}"
+    echo "  req update    Update all requirements from requirements/ folder"
+    echo "  req help      Show this help message"
+    echo ""
+    echo -e "${GREEN}Description:${NC}"
+    echo "  This command updates package requirements inside the container"
+    echo "  It processes files in: $REQUIREMENTS_DIR"
+    echo "  - additional_ros_requirements.txt (apt packages)"
+    echo "  - additional_deb_requirements.txt (apt packages)"
+    echo "  - additional_pip_requirements.txt (pip packages)"
+}
+
+case "${1:-help}" in
+    update)
+        update_requirements
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    *)
+        echo -e "${RED}Unknown command: $1${NC}"
+        show_help
+        exit 1
+        ;;
+esac
