@@ -130,9 +130,17 @@ export MAX_JOBS=$(nproc)
 export PATH=/usr/local/cuda/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
-# Conda configuration
+# Conda configuration and initialization
 export PATH="/home/zozo/.anaconda/bin:$PATH"
 export CONDA_AUTO_ACTIVATE_BASE=false
+
+# Initialize conda for bash
+if [ -f "/home/zozo/.anaconda/etc/profile.d/conda.sh" ]; then
+    . "/home/zozo/.anaconda/etc/profile.d/conda.sh"
+elif [ -f "/home/zozo/.anaconda/bin/conda" ]; then
+    # Fallback initialization if conda.sh doesn't exist
+    eval "$(/home/zozo/.anaconda/bin/conda shell.bash hook)"
+fi
 
 # ROS Domain ID (should be set from host environment)
 export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
@@ -140,18 +148,27 @@ export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
 # Function to quickly activate conda environments
 activate_conda() {
     if [ -z "$1" ]; then
-        conda env list 2>/dev/null || echo "Conda not available"
+        echo "Usage: activate_conda <environment_name>"
+        echo "Available environments:"
+        if command -v conda >/dev/null 2>&1; then
+            conda env list 2>/dev/null || echo "  (conda not properly initialized)"
+        else
+            echo "  (conda not available)"
+        fi
         return 1
     fi
     
     if command -v conda >/dev/null 2>&1; then
         if conda env list | grep -q "^$1 "; then
             conda activate "$1"
+            echo "Activated conda environment: $1"
         else
+            echo "Environment '$1' not found. Available environments:"
             conda env list
             return 1
         fi
     else
+        echo "Conda is not available. Please ensure conda is properly installed and initialized."
         return 1
     fi
 }

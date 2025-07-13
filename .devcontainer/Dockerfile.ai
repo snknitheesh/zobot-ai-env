@@ -138,7 +138,11 @@ USER $USERNAME
 WORKDIR $ZOBOT_WS
 
 RUN echo 'source /home/zozo/zobot_ws/.bin/alias.sh' >> /home/zozo/.bashrc && \
-    echo 'export PATH="/home/zozo/.anaconda/.bin:$PATH"' >> /home/zozo/.bashrc && \
-    echo 'export CONDA_AUTO_ACTIVATE_BASE=false' >> /home/zozo/.bashrc
+    echo 'export PATH="/home/zozo/.anaconda/bin:$PATH"' >> /home/zozo/.bashrc && \
+    echo 'export CONDA_AUTO_ACTIVATE_BASE=false' >> /home/zozo/.bashrc && \
+    echo '# Initialize conda' >> /home/zozo/.bashrc && \
+    echo 'if [ -f "/home/zozo/.anaconda/etc/profile.d/conda.sh" ]; then' >> /home/zozo/.bashrc && \
+    echo '    . "/home/zozo/.anaconda/etc/profile.d/conda.sh"' >> /home/zozo/.bashrc && \
+    echo 'fi' >> /home/zozo/.bashrc
 
 #################################################################################################################################

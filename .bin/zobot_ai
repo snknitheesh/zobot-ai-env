@@ -105,11 +105,6 @@ start_container() {
         build_container "$distro"
     fi
     
-    local conda_cmd=""
-    if [ -n "$conda_env" ]; then
-        conda_cmd="conda activate $conda_env; "
-    fi
-    
     local mount_args=""
     if [ -n "$mount_vol" ]; then
         if [ ! -d "$mount_vol" ]; then
@@ -123,7 +118,11 @@ start_container() {
     
     if container_running "$distro"; then
         echo -e "${GREEN}Entering running container...${NC}"
-        docker exec -it "$container_name" bash -c "${conda_cmd}bash"
+        if [ -n "$conda_env" ]; then
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
+        else
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && exec bash"
+        fi
     elif container_exists "$distro"; then
         echo -e "${YELLOW}Starting existing container...${NC}"
         docker rm "$container_name" &> /dev/null
@@ -151,7 +150,11 @@ start_container() {
         
         echo -e "${GREEN}Container started in background. Entering container...${NC}"
         sleep 2  
-        docker exec -it "$container_name" bash -c "${conda_cmd}bash"
+        if [ -n "$conda_env" ]; then
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
+        else
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && exec bash"
+        fi
     else
         echo -e "${GREEN}Starting new container...${NC}"
         docker run -d \
@@ -177,7 +180,11 @@ start_container() {
         
         echo -e "${GREEN}Container started in background. Entering container...${NC}"
         sleep 2  
-        docker exec -it "$container_name" bash -c "${conda_cmd}bash"
+        if [ -n "$conda_env" ]; then
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
+        else
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && exec bash"
+        fi
     fi
 }
 
