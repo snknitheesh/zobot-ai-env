@@ -52,7 +52,7 @@ class ColconRunner:
         self.print_colored(f"🔧 Running: {' '.join(cmd)}", Colors.CYAN)
         
         try:
-            result = subprocess.run(cmd, cwd=cwd, check=False)
+            result = subprocess.run(cmd, stderr=subprocess.DEVNULL, cwd=cwd, check=False)
             return result.returncode
         except Exception as e:
             self.print_colored(f"Error running command: {e}", Colors.RED)
@@ -100,24 +100,22 @@ class ColconRunner:
         
         build_cmd = [
             "colcon", "build",
-            "--symlink-install",
             "--cmake-args", "-DCMAKE_BUILD_TYPE=Release",
             f"-DBUILD_TESTING={'ON' if test_mode else 'OFF'}",
             "--base-paths", str(self.ros_folder),
             "--build-base", str(self.build_dir / "build"),
             "--install-base", str(self.build_dir / "install"),
-            "--log-base", str(self.build_dir / "log")
         ] + package_args
-        
+
         result = self.run_command(build_cmd)
-        
+
         if result == 0:
             self.print_colored("Build successful!", Colors.GREEN)
-            self.print_colored("Sourcing workspace...", Colors.YELLOW)
             
             setup_path = self.build_dir / "install" / "setup.bash"
-            if setup_path.exists():
-                self.print_colored(f"Run: source {setup_path}", Colors.CYAN)
+            
+            self.source_ros_setup()
+            self.print_colored("Workspace Sourced...", Colors.GREEN)
         else:
             self.print_colored("Build failed!", Colors.RED)
             
@@ -137,7 +135,6 @@ class ColconRunner:
             "--base-paths", str(self.ros_folder),
             "--build-base", str(self.build_dir / "build"),
             "--install-base", str(self.build_dir / "install"),
-            "--log-base", str(self.build_dir / "log")
         ] + package_args
         
         result = self.run_command(test_cmd)

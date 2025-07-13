@@ -41,6 +41,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
         vim \
         nano \
         build-essential \
+        lsb-release \
         cmake \
         pkg-config \
         software-properties-common \
@@ -55,10 +56,26 @@ RUN --mount=type=cache,target=/var/cache/apt \
         rsync \
     && rm -rf /var/lib/apt/lists/*
 
+
+#################################################################################################################################
+# SIM INSTALLATIONS
+#################################################################################################################################
+FROM underlay-builder AS sim-builder
+RUN --mount=type=cache,target=/var/cache/apt \
+    curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null && \
+    apt-get update && \
+    if [ "${ROS_DISTRO}" = "humble" ]; then \
+        apt-get install -y gz-garden; \
+    elif [ "${ROS_DISTRO}" = "jazzy" ]; then \
+        apt-get install -y gz-harmonic; \
+    fi && \
+    rm -rf /var/lib/apt/lists/*
+
 #################################################################################################################################
 # CONDA INSTALLATION 
 #################################################################################################################################
-FROM underlay-builder AS conda-builder
+FROM sim-builder AS conda-builder
 
 USER $USERNAME
 WORKDIR /home/zozo
