@@ -20,6 +20,37 @@ update_requirements() {
     
     cd "$REQUIREMENTS_DIR" || exit 1
     
+    # Update VCS repositories if depend.repos exists and has content
+    if [ -f "depend.repos" ]; then
+        echo -e "${YELLOW}Updating VCS repositories...${NC}"
+        if [ -s "depend.repos" ] && [ "$(grep -c '^\s*[^#]' depend.repos)" -gt 1 ]; then
+            echo -e "${CYAN}Importing repositories from depend.repos...${NC}"
+            cd /home/zozo/zobot_ws || exit 1
+            
+            # Create src directory if it doesn't exist
+            mkdir -p .src
+            
+            # Import repositories
+            if vcs import .src < "$REQUIREMENTS_DIR/depend.repos"; then
+                echo -e "${GREEN}VCS repositories imported successfully${NC}"
+                
+                # Build the imported repositories
+                echo -e "${CYAN}Building imported repositories...${NC}"
+                if . /opt/ros/$ROS_DISTRO/setup.sh && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release; then
+                    echo -e "${GREEN}Repositories built successfully${NC}"
+                else
+                    echo -e "${RED}Failed to build some repositories${NC}"
+                fi
+            else
+                echo -e "${RED}Failed to import VCS repositories${NC}"
+            fi
+            
+            cd "$REQUIREMENTS_DIR" || exit 1
+        else
+            echo -e "${YELLOW}depend.repos is empty or contains only comments${NC}"
+        fi
+    fi
+    
     if [ -f "additional_ros_requirements.txt" ]; then
         echo -e "${YELLOW}Updating ROS requirements...${NC}"
         if grep -vE '^\s*#|^\s*$' additional_ros_requirements.txt | wc -l > 0; then
@@ -63,6 +94,7 @@ show_help() {
     echo "  - additional_ros_requirements.txt (apt packages)"
     echo "  - additional_deb_requirements.txt (apt packages)"
     echo "  - additional_pip_requirements.txt (pip packages)"
+    echo "  - depend.repos (VCS repositories for overlay workspace)"
 }
 
 case "${1:-help}" in

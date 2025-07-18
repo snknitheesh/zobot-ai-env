@@ -82,6 +82,7 @@ FROM conda-builder AS requirements-builder
 COPY .requirements/additional_ros_requirements.txt /tmp/additional_ros_requirements.txt
 COPY .requirements/additional_pip_requirements.txt /tmp/additional_pip_requirements.txt
 COPY .requirements/additional_deb_requirements.txt /tmp/additional_deb_requirements.txt
+COPY .requirements/depend.repos /tmp/depend.repos
 
 RUN --mount=type=cache,target=/var/cache/apt \
     if [ -s /tmp/additional_ros_requirements.txt ]; then \
@@ -137,6 +138,14 @@ ENV MAX_JOBS=8
 USER $USERNAME
 WORKDIR $ZOBOT_WS
 
+# Import repositories from depend.repos
+COPY .requirements/depend.repos /tmp/depend.repos
+RUN mkdir -p .src && \
+    vcs import .src < /tmp/depend.repos 
+
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release 
+    
 RUN echo 'source /home/zozo/zobot_ws/.bin/alias.sh' >> /home/zozo/.bashrc && \
     echo 'export PATH="/home/zozo/.anaconda/bin:$PATH"' >> /home/zozo/.bashrc && \
     echo 'export CONDA_AUTO_ACTIVATE_BASE=false' >> /home/zozo/.bashrc && \
