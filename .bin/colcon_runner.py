@@ -106,7 +106,6 @@ class ColconRunner:
             "--base-paths", str(self.ros_folder),
             "--build-base", str(self.build_dir / "build"),
             "--install-base", str(self.build_dir / "install"),
-            "--log-base", str(self.build_dir / "log")
         ] + package_args
         
         result = self.run_command(build_cmd)
@@ -137,7 +136,6 @@ class ColconRunner:
             "--base-paths", str(self.ros_folder),
             "--build-base", str(self.build_dir / "build"),
             "--install-base", str(self.build_dir / "install"),
-            "--log-base", str(self.build_dir / "log")
         ] + package_args
         
         result = self.run_command(test_cmd)
