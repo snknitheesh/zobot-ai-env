@@ -123,6 +123,52 @@ class ColconRunner:
             
         return result
     
+    def build_folder(self, folder_path: str, test_mode: bool = False):
+        """Build packages from a specific folder"""
+        folder_path = Path(folder_path).resolve()
+        
+        if not folder_path.exists():
+            self.print_colored(f"Folder does not exist: {folder_path}", Colors.RED)
+            return 1
+            
+        if not folder_path.is_dir():
+            self.print_colored(f"Path is not a directory: {folder_path}", Colors.RED)
+            return 1
+        
+        # Check if there are any buildable packages in the folder
+        packages_found = list(folder_path.rglob("package.xml"))
+        if not packages_found:
+            self.print_colored(f"No ROS packages found in: {folder_path}", Colors.YELLOW)
+            return 0
+            
+        self.print_colored(f"Building packages from folder: {folder_path}", Colors.GREEN)
+        self.print_colored(f"Found {len(packages_found)} package(s)", Colors.CYAN)
+        
+        build_cmd = [
+            "colcon", "build",
+            "--symlink-install",
+            "--cmake-args", "-DCMAKE_BUILD_TYPE=Release",
+            f"-DBUILD_TESTING={'ON' if test_mode else 'OFF'}",
+            "--base-paths", str(folder_path),
+            "--build-base", str(self.build_dir / "build"),
+            "--install-base", str(self.build_dir / "install"),
+            "--log-base", str(self.build_dir / "log")
+        ]
+        
+        result = self.run_command(build_cmd)
+        
+        if result == 0:
+            self.print_colored("Build successful!", Colors.GREEN)
+            self.print_colored("Sourcing workspace...", Colors.YELLOW)
+            
+            setup_path = self.build_dir / "install" / "setup.bash"
+            if setup_path.exists():
+                self.print_colored(f"Run: source {setup_path}", Colors.CYAN)
+        else:
+            self.print_colored("Build failed!", Colors.RED)
+            
+        return result
+    
     def test_packages(self, packages: List[str] = None):
         """Test specified packages or all packages"""
         if packages:
@@ -188,6 +234,7 @@ class ColconRunner:
 {Colors.GREEN}Commands:{Colors.NC}
   b, ba          Build all packages
   b <pkg>...     Build specific package(s)
+  bf <path>      Build packages from specific folder
   t, ta          Test all packages  
   t <pkg>...     Test specific package(s)
   c, ca          Clean all build artifacts
@@ -198,6 +245,7 @@ class ColconRunner:
   cr ba                    # Build all packages
   cr b my_package          # Build specific package
   cr b pkg1 pkg2           # Build multiple packages
+  cr bf /opt/ros/ros_ws    # Build packages from folder
   cr ta                    # Test all packages
   cr t my_package          # Test specific package
   cr ca                    # Clean all builds
@@ -228,6 +276,13 @@ def main():
                 return runner.build_packages()
             else:
                 return runner.build_packages(packages)
+        
+        elif command == 'bf':
+            if not packages:
+                runner.print_colored("bf command requires a folder path", Colors.RED)
+                runner.show_help()
+                return 1
+            return runner.build_folder(packages[0])
                 
         elif command in ['t', 'ta']:
             if command == 'ta' or not packages:

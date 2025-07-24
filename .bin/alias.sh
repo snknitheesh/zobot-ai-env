@@ -1,6 +1,6 @@
 #!/binalias cr="python3 /home/zozo/zobot_ws/.bin/colcon_runner.py"
 alias req="/home/zozo/zobot_ws/.bin/req"
-alias vcs-mgr="/home/zozo/zobot_ws/.bin/vcs-mgr"
+alias ros-mgr="/home/zozo/zobot_ws/.bin/ros-mgr"
 WORKSPACE_BIN="/home/zozo/zobot_ws/.bin"sh
 
 # Dynamic workspace detection for aliases

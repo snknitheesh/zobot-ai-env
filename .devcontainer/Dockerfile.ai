@@ -91,6 +91,11 @@ RUN --mount=type=cache,target=/var/cache/apt \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
+# Initialize rosdep if it's installed
+RUN if command -v rosdep >/dev/null 2>&1; then \
+        rosdep init || true; \
+    fi
+
 RUN --mount=type=cache,target=/var/cache/apt \
     if [ -s /tmp/additional_deb_requirements.txt ]; then \
         apt-get update && \
@@ -116,15 +121,22 @@ RUN mkdir -p $ZOBOT_WS && \
     mkdir -p /home/zozo/.ros_builds && \
     mkdir -p /home/zozo/mount && \
     mkdir -p /home/zozo/cave && \
-    chown -R $USERNAME:$USERNAME /home/zozo
+    mkdir -p /opt/ros/ros_ws && \
+    chown -R $USERNAME:$USERNAME /home/zozo && \
+    chown -R $USERNAME:$USERNAME /opt/ros/ros_ws && \
+    chmod -R 755 /opt/ros/ros_ws
 
 # Copy configuration files
 COPY .bin/ubuntu_bashrc /home/zozo/.bashrc
 COPY .bin/alias.sh /home/zozo/zobot_ws/.bin/alias.sh
 COPY .bin/colcon_runner.py /home/zozo/zobot_ws/.bin/colcon_runner.py
 COPY .bin/colcon_defaults.yaml /home/zozo/zobot_ws/.bin/colcon_defaults.yaml
+COPY .bin/ros-mgr /home/zozo/zobot_ws/.bin/ros-mgr
+COPY .bin/req /home/zozo/zobot_ws/.bin/req
 RUN chown -R $USERNAME:$USERNAME /home/zozo && \
-    chmod +x /home/zozo/zobot_ws/.bin/colcon_runner.py
+    chmod +x /home/zozo/zobot_ws/.bin/colcon_runner.py && \
+    chmod +x /home/zozo/zobot_ws/.bin/ros-mgr && \
+    chmod +x /home/zozo/zobot_ws/.bin/req
 
 # ROS environment setup
 ENV ROS_DISTRO=${ROS_DISTRO}
@@ -138,13 +150,29 @@ ENV MAX_JOBS=8
 USER $USERNAME
 WORKDIR $ZOBOT_WS
 
-# Import repositories from depend.repos
-COPY .requirements/depend.repos /tmp/depend.repos
-RUN mkdir -p .src && \
-    vcs import .src < /tmp/depend.repos 
+# Import VCS repositories from depend.repos to /opt/ros/ros_ws
+COPY --chown=$USERNAME:$USERNAME .requirements/depend.repos /tmp/depend.repos
+RUN if [ -s /tmp/depend.repos ] && [ "$(grep -c '^\s*[^#]' /tmp/depend.repos)" -gt 1 ]; then \
+        cd /opt/ros/ros_ws && \
+        vcs import . < /tmp/depend.repos && \
+        echo "📦 VCS repositories imported successfully to /opt/ros/ros_ws"; \
+    else \
+        echo "ℹ️  No valid repositories found in depend.repos"; \
+    fi
 
-RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
-    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release 
+# Build imported repositories if any exist using colcon runner
+RUN if [ -d "/opt/ros/ros_ws" ] && [ "$(find /opt/ros/ros_ws -name "*.xml" -o -name "CMakeLists.txt" -o -name "setup.py" | wc -l)" -gt 0 ]; then \
+        echo "🔨 Building imported repositories..." && \
+        . /opt/ros/${ROS_DISTRO}/setup.sh && \
+        colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
+            --base-paths /opt/ros/ros_ws \
+            --build-base /home/zozo/.ros_builds/build \
+            --install-base /home/zozo/.ros_builds/install \
+            --log-base /home/zozo/.ros_builds/log && \
+        echo "✅ Repositories built successfully"; \
+    else \
+        echo "ℹ️  No buildable packages found in ROS overlay workspace"; \
+    fi 
     
 RUN echo 'source /home/zozo/zobot_ws/.bin/alias.sh' >> /home/zozo/.bashrc && \
     echo 'export PATH="/home/zozo/.anaconda/bin:$PATH"' >> /home/zozo/.bashrc && \
