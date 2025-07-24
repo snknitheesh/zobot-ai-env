@@ -154,10 +154,7 @@ WORKDIR $ZOBOT_WS
 COPY --chown=$USERNAME:$USERNAME .requirements/depend.repos /tmp/depend.repos
 RUN if [ -s /tmp/depend.repos ] && [ "$(grep -c '^\s*[^#]' /tmp/depend.repos)" -gt 1 ]; then \
         cd /opt/ros/ros_ws && \
-        vcs import . < /tmp/depend.repos && \
-        echo "📦 VCS repositories imported successfully to /opt/ros/ros_ws"; \
-    else \
-        echo "ℹ️  No valid repositories found in depend.repos"; \
+        vcs import . < /tmp/depend.repos; \
     fi
 
 # Build imported repositories if any exist using colcon runner
@@ -167,11 +164,7 @@ RUN if [ -d "/opt/ros/ros_ws" ] && [ "$(find /opt/ros/ros_ws -name "*.xml" -o -n
         colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
             --base-paths /opt/ros/ros_ws \
             --build-base /home/zozo/.ros_builds/build \
-            --install-base /home/zozo/.ros_builds/install \
-            --log-base /home/zozo/.ros_builds/log && \
-        echo "✅ Repositories built successfully"; \
-    else \
-        echo "ℹ️  No buildable packages found in ROS overlay workspace"; \
+            --install-base /home/zozo/.ros_builds/install; \
     fi 
     
 RUN echo 'source /home/zozo/zobot_ws/.bin/alias.sh' >> /home/zozo/.bashrc && \
