@@ -11,7 +11,7 @@ NC='\033[0m'
 REQUIREMENTS_DIR="/home/zozo/zobot_ws/.requirements"
 
 update_requirements() {
-    echo -e "${CYAN}🔄 Updating requirements inside container...${NC}"
+    echo -e "${CYAN}Updating requirements inside container...${NC}"
     
     if [ ! -d "$REQUIREMENTS_DIR" ]; then
         echo -e "${RED}Requirements directory not found: $REQUIREMENTS_DIR${NC}"
@@ -20,31 +20,22 @@ update_requirements() {
     
     cd "$REQUIREMENTS_DIR" || exit 1
     
-    # Update VCS repositories if depend.repos exists and has content
     if [ -f "depend.repos" ]; then
         echo -e "${YELLOW}Updating VCS repositories...${NC}"
         if [ -s "depend.repos" ] && [ "$(grep -c '^\s*[^#]' depend.repos)" -gt 1 ]; then
-            echo -e "${CYAN}📦 Importing repositories from depend.repos...${NC}"
+            echo -e "${CYAN}Importing repositories from depend.repos...${NC}"
             cd /home/zozo/zobot_ws || exit 1
-            
-            # Use ros-mgr to import and build repositories
             if ros-mgr import; then
-                echo -e "${GREEN}✅ VCS repositories imported successfully${NC}"
+                echo -e "${GREEN}VCS repositories imported successfully${NC}"
                 
-                # Build the imported repositories
                 echo -e "${CYAN}🔨 Building imported repositories...${NC}"
                 if ros-mgr build; then
-                    echo -e "${GREEN}✅ Repositories built successfully${NC}"
-                else
-                    echo -e "${RED}❌ Failed to build some repositories${NC}"
+                    echo -e "${GREEN}Repositories built successfully${NC}"
                 fi
-            else
-                echo -e "${RED}❌ Failed to import VCS repositories${NC}"
             fi
-            
             cd "$REQUIREMENTS_DIR" || exit 1
         else
-            echo -e "${YELLOW}ℹ️  depend.repos is empty or contains only comments${NC}"
+            echo -e "${YELLOW}ℹdepend.repos is empty or contains only comments${NC}"
         fi
     fi
     

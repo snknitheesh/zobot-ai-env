@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# VCS Repository Management Script
+# ROS Repository Management Script
 
 # Color definitions
 GREEN='\033[0;32m'
@@ -15,31 +15,29 @@ DEPEND_REPOS_FILE="$REQUIREMENTS_DIR/depend.repos"
 ROS_OVERLAY_DIR="/opt/ros/ros_ws"
 
 vcs_import() {
-    echo -e "${CYAN}📦 Importing VCS repositories...${NC}"
+    echo -e "${CYAN}Importing VCS repositories...${NC}"
     
     if [ ! -f "$DEPEND_REPOS_FILE" ]; then
-        echo -e "${RED}❌ depend.repos file not found: $DEPEND_REPOS_FILE${NC}"
+        echo -e "${RED}depend.repos file not found: $DEPEND_REPOS_FILE${NC}"
         exit 1
     fi
     
     if [ ! -s "$DEPEND_REPOS_FILE" ] || [ "$(grep -c '^\s*[^#]' "$DEPEND_REPOS_FILE")" -le 1 ]; then
-        echo -e "${YELLOW}ℹ️  depend.repos is empty or contains only comments${NC}"
+        echo -e "${YELLOW}depend.repos is empty or contains only comments${NC}"
         return 0
     fi
     
-    # Create ROS overlay directory with proper permissions
     sudo mkdir -p "$ROS_OVERLAY_DIR"
     sudo chown -R $USER:$USER "$ROS_OVERLAY_DIR"
     sudo chmod -R 755 "$ROS_OVERLAY_DIR"
     
     cd "$ROS_OVERLAY_DIR" || exit 1
     
-    # Import repositories
     if vcs import . < "$DEPEND_REPOS_FILE"; then
-        echo -e "${GREEN}✅ VCS repositories imported successfully to $ROS_OVERLAY_DIR${NC}"
+        echo -e "${GREEN}VCS repositories imported successfully to $ROS_OVERLAY_DIR${NC}"
         return 0
     else
-        echo -e "${RED}❌ Failed to import VCS repositories${NC}"
+        echo -e "${RED}Failed to import VCS repositories${NC}"
         return 1
     fi
 }
@@ -74,104 +72,95 @@ vcs_build() {
     echo -e "${CYAN}🔨 Building VCS repositories...${NC}"
     
     if [ ! -d "$ROS_OVERLAY_DIR" ]; then
-        echo -e "${YELLOW}ℹ️  No ROS overlay directory found at $ROS_OVERLAY_DIR${NC}"
+        echo -e "${YELLOW}No ROS overlay directory found at $ROS_OVERLAY_DIR${NC}"
         return 0
     fi
     
-    # Check if there are any buildable packages
     if [ "$(find "$ROS_OVERLAY_DIR" -name "*.xml" -o -name "CMakeLists.txt" -o -name "setup.py" | wc -l)" -eq 0 ]; then
-        echo -e "${YELLOW}ℹ️  No buildable packages found in $ROS_OVERLAY_DIR${NC}"
+        echo -e "${YELLOW}No buildable packages found in $ROS_OVERLAY_DIR${NC}"
         return 0
     fi
     
     cd "$WORKSPACE_DIR" || exit 1
     
-    # Use colcon runner to build the folder
     if cr bf "$ROS_OVERLAY_DIR"; then
-        echo -e "${GREEN}✅ Repositories built successfully${NC}"
-        echo -e "${CYAN}💡 Don't forget to source the setup file: source ~/.ros_builds/install/setup.bash${NC}"
+        echo -e "${GREEN}Repositories built successfully${NC}"
+        echo -e "${CYAN}Don't forget to source the setup file: source ~/.ros_builds/install/setup.bash${NC}"
         return 0
     else
-        echo -e "${RED}❌ Failed to build some repositories${NC}"
+        echo -e "${RED}Failed to build some repositories${NC}"
         return 1
     fi
 }
 
 vcs_clean() {
-    echo -e "${CYAN}🧹 Cleaning VCS repositories...${NC}"
+    echo -e "${CYAN}Cleaning VCS repositories...${NC}"
     
     if [ -d "$ROS_OVERLAY_DIR" ]; then
-        echo -e "${YELLOW}⚠️  This will remove all VCS repositories in $ROS_OVERLAY_DIR. Continue? (y/N)${NC}"
+        echo -e "${YELLOW}This will remove all VCS repositories in $ROS_OVERLAY_DIR. Continue? (y/N)${NC}"
         read -r response
         if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
             sudo rm -rf "$ROS_OVERLAY_DIR"
-            echo -e "${GREEN}✅ VCS repositories cleaned${NC}"
-        else
-            echo -e "${CYAN}ℹ️  Operation cancelled${NC}"
+            echo -e "${GREEN}VCS repositories cleaned${NC}"
         fi
     else
-        echo -e "${YELLOW}ℹ️  No ROS overlay directory found${NC}"
+        echo -e "${YELLOW}ℹNo ROS overlay directory found${NC}"
     fi
     
     cd "$WORKSPACE_DIR" || exit 1
     
     if [ -d "build" ]; then
-        echo -e "${YELLOW}⚠️  Also remove build directory? (y/N)${NC}"
+        echo -e "${YELLOW}Also remove build directory? (y/N)${NC}"
         read -r response
         if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
             rm -rf build/
-            echo -e "${GREEN}✅ Build directory cleaned${NC}"
+            echo -e "${GREEN}Build directory cleaned${NC}"
         fi
     fi
     
     if [ -d "install" ]; then
-        echo -e "${YELLOW}⚠️  Also remove install directory? (y/N)${NC}"
+        echo -e "${YELLOW}Also remove install directory? (y/N)${NC}"
         read -r response
         if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
             rm -rf install/
-            echo -e "${GREEN}✅ Install directory cleaned${NC}"
+            echo -e "${GREEN}Install directory cleaned${NC}"
         fi
     fi
 }
 
 rosdep_install() {
-    echo -e "${CYAN}📦 Installing ROS dependencies...${NC}"
+    echo -e "${CYAN}Installing ROS dependencies...${NC}"
     
-    # Update rosdep
     echo -e "${YELLOW}Updating rosdep database...${NC}"
     if sudo rosdep update; then
-        echo -e "${GREEN}✅ Rosdep database updated${NC}"
+        echo -e "${GREEN}Rosdep database updated${NC}"
     else
-        echo -e "${RED}❌ Failed to update rosdep database${NC}"
+        echo -e "${RED}Failed to update rosdep database${NC}"
         return 1
     fi
     
-    # Install dependencies for ROS overlay workspace
     if [ -d "$ROS_OVERLAY_DIR" ]; then
         echo -e "${YELLOW}Installing dependencies for $ROS_OVERLAY_DIR...${NC}"
         if rosdep install --from-paths "$ROS_OVERLAY_DIR" --ignore-src -r -y; then
-            echo -e "${GREEN}✅ Dependencies installed for ROS overlay workspace${NC}"
+            echo -e "${GREEN}Dependencies installed for ROS overlay workspace${NC}"
         else
-            echo -e "${YELLOW}⚠️  Some dependencies might not be available for ROS overlay workspace${NC}"
+            echo -e "${YELLOW}Some dependencies might not be available for ROS overlay workspace${NC}"
         fi
     else
-        echo -e "${YELLOW}ℹ️  No ROS overlay directory found at $ROS_OVERLAY_DIR${NC}"
+        echo -e "${YELLOW}No ROS overlay directory found at $ROS_OVERLAY_DIR${NC}"
     fi
     
-    # Install dependencies for main workspace
     ROS_MAIN_DIR="$WORKSPACE_DIR/ros"
     if [ -d "$ROS_MAIN_DIR" ]; then
         echo -e "${YELLOW}Installing dependencies for $ROS_MAIN_DIR...${NC}"
         if rosdep install --from-paths "$ROS_MAIN_DIR" --ignore-src -r -y; then
-            echo -e "${GREEN}✅ Dependencies installed for main workspace${NC}"
-        else
-            echo -e "${YELLOW}⚠️  Some dependencies might not be available for main workspace${NC}"
+            echo -e "${GREEN}Dependencies installed for main workspace${NC}"
         fi
     else
-        echo -e "${YELLOW}ℹ️  No main ROS directory found at $ROS_MAIN_DIR${NC}"
+        echo -e "${YELLOW}No main ROS directory found at $ROS_MAIN_DIR${NC}"
     fi
     
-    echo -e "${GREEN}✅ ROS dependency installation complete${NC}"
+    echo -e "${GREEN}ROS dependency installation complete${NC}"
 }
 
 show_help() {
