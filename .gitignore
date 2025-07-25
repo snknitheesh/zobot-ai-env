@@ -1,4 +1,6 @@
 .qodo
-mount/
 ros/
 .src/
+mount/
+workspaces/
+
