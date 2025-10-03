@@ -100,7 +100,7 @@ class ColconRunner:
         
         build_cmd = [
             "colcon", "build",
-            # "--symlink-install",
+            "--symlink-install",
             "--cmake-args", "-DCMAKE_BUILD_TYPE=Release",
             f"-DBUILD_TESTING={'ON' if test_mode else 'OFF'}",
             "--base-paths", str(self.ros_folder),
@@ -145,7 +145,7 @@ class ColconRunner:
         
         build_cmd = [
             "colcon", "build",
-            # "--symlink-install",
+            "--symlink-install",
             "--cmake-args", "-DCMAKE_BUILD_TYPE=Release",
             f"-DBUILD_TESTING={'ON' if test_mode else 'OFF'}",
             "--base-paths", str(folder_path),

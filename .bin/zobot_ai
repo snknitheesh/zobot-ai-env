@@ -115,13 +115,18 @@ start_container() {
     fi
     
     local ros_domain_id=${ROS_DOMAIN_ID:-0}
+
+    # Create XDG_RUNTIME_DIR on host
+    local xdg_runtime_dir="/tmp/runtime-$(id -u)"
+    mkdir -p "$xdg_runtime_dir"
+    chmod 700 "$xdg_runtime_dir"
     
     if container_running "$distro"; then
         echo -e "${GREEN}Entering running container...${NC}"
         if [ -n "$conda_env" ]; then
             docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
         else
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && exec bash"
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts && exec bash"
         fi
     elif container_exists "$distro"; then
         echo -e "${YELLOW}Starting existing container...${NC}"
@@ -140,10 +145,12 @@ start_container() {
             --env NVIDIA_DRIVER_CAPABILITIES=all \
             --env QT_X11_NO_MITSHM=1 \
             --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
+            --volume "$xdg_runtime_dir:/tmp/runtime-zozo:rw" \
             --volume "$HOME/.ssh:/home/zozo/.ssh:ro" \
             --volume "/mnt/cave:/home/zozo/cave:rw" \
             --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
             --volume "/mnt/cave/.conda:/home/zozo/.conda:rw" \
+            --device /dev/dri:/dev/dri \
             $mount_args \
             "$image_tag" \
             tail -f /dev/null
@@ -153,7 +160,7 @@ start_container() {
         if [ -n "$conda_env" ]; then
             docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
         else
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && exec bash"
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts && exec bash"
         fi
     else
         echo -e "${GREEN}Starting new container...${NC}"
@@ -165,6 +172,7 @@ start_container() {
             --runtime nvidia \
             --privileged \
             --env DISPLAY="$DISPLAY" \
+            --volume "$xdg_runtime_dir:/tmp/runtime-zozo:rw" \
             --env ROS_DOMAIN_ID="$ros_domain_id" \
             --env NVIDIA_VISIBLE_DEVICES=all \
             --env NVIDIA_DRIVER_CAPABILITIES=all \
@@ -174,6 +182,7 @@ start_container() {
             --volume "/mnt/cave:/home/zozo/cave:rw" \
             --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
             --volume "/mnt/cave/.conda:/home/zozo/.conda:rw" \
+            --device /dev/dri:/dev/dri \
             $mount_args \
             "$image_tag" \
             tail -f /dev/null
@@ -183,7 +192,7 @@ start_container() {
         if [ -n "$conda_env" ]; then
             docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
         else
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && exec bash"
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts && exec bash"
         fi
     fi
 }

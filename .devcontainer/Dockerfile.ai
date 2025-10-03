@@ -9,7 +9,6 @@ ARG BASE_IMAGE=${BASE_IMAGE_HUMBLE}
 FROM ${BASE_IMAGE} AS underlay-builder
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG ROS_DISTRO=humble
 
 # User configuration
 ENV USERNAME=zozo
@@ -112,10 +111,24 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         pip install -r /tmp/additional_pip_requirements.txt; \
     fi
 
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m pip install --upgrade pip setuptools && \
+    python3 -m pip install --upgrade colcon-core colcon-common-extensions
+
+#################################################################################################################################
+# Simulation BUILD
+#################################################################################################################################
+FROM requirements-builder AS sim-builder
+
+RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null && \
+    apt-get update && \
+    apt-get install gz-harmonic -y
+
 #################################################################################################################################
 # OVERLAY BUILD
 #################################################################################################################################
-FROM requirements-builder AS overlay-builder
+FROM sim-builder AS overlay-builder
 
 RUN mkdir -p $ZOBOT_WS && \
     mkdir -p /home/zozo/.ros_builds && \
