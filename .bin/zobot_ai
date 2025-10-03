@@ -113,6 +113,16 @@ start_container() {
         fi
         mount_args="-v $mount_vol:/home/zozo/zobot_ws/mount"
     fi
+
+    # Check if conda host directory exists and is not empty
+    local conda_host_dir="/mnt/cave/.conda_docker"
+    local conda_mount_args=""
+    if [ -d "$conda_host_dir" ] && [ "$(ls -A "$conda_host_dir" 2>/dev/null)" ]; then
+        echo -e "${GREEN}Found existing conda directory, mounting...${NC}"
+        conda_mount_args="--volume $conda_host_dir:/home/zozo/.anaconda:rw"
+    else
+        echo -e "${YELLOW}Conda directory empty or missing, using container's conda installation${NC}"
+    fi
     
     local ros_domain_id=${ROS_DOMAIN_ID:-0}
 
@@ -149,7 +159,7 @@ start_container() {
             --volume "$HOME/.ssh:/home/zozo/.ssh:ro" \
             --volume "/mnt/cave:/home/zozo/cave:rw" \
             --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
-            --volume "/mnt/cave/.conda:/home/zozo/.conda:rw" \
+            $conda_mount_args \
             --device /dev/dri:/dev/dri \
             $mount_args \
             "$image_tag" \
@@ -181,7 +191,7 @@ start_container() {
             --volume "$HOME/.ssh:/home/zozo/.ssh:ro" \
             --volume "/mnt/cave:/home/zozo/cave:rw" \
             --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
-            --volume "/mnt/cave/.conda:/home/zozo/.conda:rw" \
+            $conda_mount_args \
             --device /dev/dri:/dev/dri \
             $mount_args \
             "$image_tag" \
@@ -201,10 +211,12 @@ prune_container() {
     local distro=$1
     local container_name="${CONTAINER_NAME}-${distro}"
     local image_tag="${IMAGE_NAME}-${distro}"
+    local conda_host_dir="/mnt/cave/.conda_docker"
     
     echo -e "${RED}Pruning container for $distro...${NC}"
     
     if container_exists "$distro"; then
+        docker cp "$container_name:/home/zozo/.anaconda/." "$conda_host_dir/"
         docker stop "$container_name" &> /dev/null
         docker rm "$container_name" &> /dev/null
         echo -e "${GREEN}Container removed${NC}"

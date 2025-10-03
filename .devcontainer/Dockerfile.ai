@@ -71,7 +71,11 @@ RUN --mount=type=cache,target=/tmp/conda,uid=1000,gid=1000 \
 USER root
 
 RUN echo 'export PATH="/home/zozo/.anaconda/bin:$PATH"' >> /etc/environment && \
-    echo 'export CONDA_AUTO_ACTIVATE_BASE=false' >> /etc/environment
+    /home/zozo/.anaconda/bin/conda tos accept --all-channels || true && \
+    /home/zozo/.anaconda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true && \
+    /home/zozo/.anaconda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true && \
+    /home/zozo/.anaconda/bin/conda config --system --set auto_activate_base false && \
+    /home/zozo/.anaconda/bin/conda update conda -y
 
 #################################################################################################################################
 # REQUIREMENTS BUILDER 
