@@ -54,5 +54,5 @@ alias rosws="cd /home/zozo/zobot_ws/ros"
 alias logs="cd /home/zozo/.ros_builds/log"
 alias builds="cd /home/zozo/.ros_builds"
 alias cdmount="cd /home/zozo/zobot_ws/mount"
-alias cdcave="cd /home/zozo/cave"
+alias cave="cd /home/zozo/cave"
 

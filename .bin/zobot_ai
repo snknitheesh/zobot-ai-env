@@ -126,6 +126,23 @@ start_container() {
     
     local ros_domain_id=${ROS_DOMAIN_ID:-0}
 
+    # Check if .netrc file exists and add mount for wandb login api key (Else every time we need to login after prune)
+    local netrc_mount_args=""
+    if [ -f "$HOME/.netrc" ]; then
+        netrc_mount_args="--volume $HOME/.netrc:/home/zozo/.netrc:rw"
+        echo -e "${GREEN}Found .netrc file, mounting...${NC}"
+    else
+        echo -e "${YELLOW}No .netrc file found, skipping wandb login api key mount${NC}"
+    fi
+
+    # Check if huggingface cli login api key is mounted (Else every time we need to login after prune)
+    local huggingface_mount_args=""
+    if [ -f "$HOME/.cache/huggingface/stored_tokens" ]; then
+        huggingface_mount_args="--volume $HOME/.cache/huggingface:/home/zozo/.cache/huggingface:rw"
+        echo -e "${GREEN}Found .huggingface file, mounting...${NC}"
+    else
+        echo -e "${YELLOW}Huggingface cache directory missing, skipping mounting api keys${NC}"
+    fi
     # Create XDG_RUNTIME_DIR on host
     local xdg_runtime_dir="/tmp/runtime-$(id -u)"
     mkdir -p "$xdg_runtime_dir"
@@ -159,7 +176,14 @@ start_container() {
             --volume "$HOME/.ssh:/home/zozo/.ssh:ro" \
             --volume "/mnt/cave:/home/zozo/cave:rw" \
             --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
+            --volume /dev:/dev:rw \
+            --volume /run/udev:/run/udev:ro \
+            --volume /etc/group:/etc/group.host:ro \
+            --volume /etc/passwd:/etc/passwd.host:ro \
+            --volume /home/zozo/.cache/huggingface:/home/zozo/.cache/huggingface:rw \
             $conda_mount_args \
+            $netrc_mount_args \
+            $huggingface_mount_args \
             --device /dev/dri:/dev/dri \
             $mount_args \
             "$image_tag" \
@@ -191,7 +215,13 @@ start_container() {
             --volume "$HOME/.ssh:/home/zozo/.ssh:ro" \
             --volume "/mnt/cave:/home/zozo/cave:rw" \
             --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
+            --volume /dev:/dev:rw \
+            --volume /run/udev:/run/udev:ro \
+            --volume /etc/group:/etc/group.host:ro \
+            --volume /etc/passwd:/etc/passwd.host:ro \
             $conda_mount_args \
+            $netrc_mount_args \
+            $huggingface_mount_args \
             --device /dev/dri:/dev/dri \
             $mount_args \
             "$image_tag" \

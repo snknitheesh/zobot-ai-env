@@ -163,8 +163,9 @@ ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV CARB_AUDIO_DISABLE=1
 ENV MAX_JOBS=8
-
 USER $USERNAME
+
+
 WORKDIR $ZOBOT_WS
 
 # Import VCS repositories from depend.repos to /opt/ros/ros_ws
@@ -190,6 +191,7 @@ RUN echo 'source /home/zozo/zobot_ws/.bin/alias.sh' >> /home/zozo/.bashrc && \
     echo '# Initialize conda' >> /home/zozo/.bashrc && \
     echo 'if [ -f "/home/zozo/.anaconda/etc/profile.d/conda.sh" ]; then' >> /home/zozo/.bashrc && \
     echo '    . "/home/zozo/.anaconda/etc/profile.d/conda.sh"' >> /home/zozo/.bashrc && \
-    echo 'fi' >> /home/zozo/.bashrc
+    echo 'fi' >> /home/zozo/.bashrc 
+    
 
 #################################################################################################################################
