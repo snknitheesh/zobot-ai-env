@@ -1,0 +1,10 @@
+
+topics:
+  # Face downward ZED camera topics
+  - "/face_downward/zed/left/image_rect_color"
+  - "/face_downward/zed/depth/depth_registered"
+  
+  # Face upward ZED camera topics
+  - "/face_upward/zed/left/image_rect_color"
+  - "/face_upward/zed/depth/depth_registered"
+

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# zobot_ai - Advanced container management for robotics development
+# zobot_lab - Advanced container management for robotics development
 
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
@@ -12,9 +12,9 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Container config
-CONTAINER_NAME="zobot-ai"
+CONTAINER_NAME="zobot-lab"
 DOCKERFILE_PATH="$WORKSPACE_ROOT/.devcontainer/Dockerfile.ai"
-IMAGE_NAME="zobot-ai"
+IMAGE_NAME="zobot-lab"
 
 # Default config
 ROS_DISTRO="jazzy"
@@ -25,10 +25,10 @@ PRUNE_CONTAINER=false
 
 # Show help
 show_help() {
-    echo -e "${CYAN}🤖 ZoBot AI - Robotics Development Container${NC}"
+    echo -e "${CYAN}🤖 Zobot LAB - Robotics Development Container${NC}"
     echo ""
     echo -e "${GREEN}Usage:${NC}"
-    echo "  zobot_ai [OPTIONS]"
+    echo "  zobot_lab [OPTIONS]"
     echo ""
     echo -e "${GREEN}Options:${NC}"
     echo "  --humble              Use ROS Humble (default)"
@@ -40,12 +40,12 @@ show_help() {
     echo "  --help, -h            Show this help message"
     echo ""
     echo -e "${GREEN}Examples:${NC}"
-    echo "  zobot_ai                           # Start container with ROS Humble"
-    echo "  zobot_ai --jazzy                   # Start container with ROS Jazzy"
-    echo "  zobot_ai --conda robotics          # Start with 'robotics' conda env"
-    echo "  zobot_ai --volume /path/to/volume  # Mount external volume"
-    echo "  zobot_ai --build                   # Build container only"
-    echo "  zobot_ai --prune                   # Remove container"
+    echo "  zobot_lab                           # Start container with ROS Humble"
+    echo "  zobot_lab --jazzy                   # Start container with ROS Jazzy"
+    echo "  zobot_lab --conda robotics          # Start with 'robotics' conda env"
+    echo "  zobot_lab --volume /path/to/volume  # Mount external volume"
+    echo "  zobot_lab --build                   # Build container only"
+    echo "  zobot_lab --prune                   # Remove container"
 }
 
 build_container() {
@@ -61,15 +61,13 @@ build_container() {
         base_image="rwthika/ros2-ml:humble"
     fi
     
-    docker build \
+    if docker build \
         -f "$DOCKERFILE_PATH" \
         -t "$image_tag" \
         --build-arg ROS_DISTRO="$distro" \
         --build-arg BASE_IMAGE="$base_image" \
         --target overlay-builder \
-        "$WORKSPACE_ROOT"
-    
-    if [ $? -eq 0 ]; then
+        "$WORKSPACE_ROOT"; then
         echo -e "${GREEN}Container built successfully!${NC}"
     else
         echo -e "${RED}Container build failed!${NC}"
@@ -144,7 +142,8 @@ start_container() {
         echo -e "${YELLOW}Huggingface cache directory missing, skipping mounting api keys${NC}"
     fi
     # Create XDG_RUNTIME_DIR on host
-    local xdg_runtime_dir="/tmp/runtime-$(id -u)"
+    local xdg_runtime_dir
+    xdg_runtime_dir="/tmp/runtime-$(id -u)"
     mkdir -p "$xdg_runtime_dir"
     chmod 700 "$xdg_runtime_dir"
     
@@ -153,7 +152,7 @@ start_container() {
         if [ -n "$conda_env" ]; then
             docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
         else
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts && exec bash"
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && grep -q 'zobot-$ROS_DISTRO' /etc/hosts 2>/dev/null || echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts >/dev/null; exec bash"
         fi
     elif container_exists "$distro"; then
         echo -e "${YELLOW}Starting existing container...${NC}"
@@ -176,16 +175,17 @@ start_container() {
             --volume "$HOME/.ssh:/home/zozo/.ssh:ro" \
             --volume "/mnt/cave:/home/zozo/cave:rw" \
             --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
+            --volume "/home/zozo/workspaces/money_ws:/home/zozo/crypto_ws:rw" \
             --volume /dev:/dev:rw \
             --volume /run/udev:/run/udev:ro \
             --volume /etc/group:/etc/group:ro \
             --volume /etc/passwd:/etc/passwd:ro \
             --volume /home/zozo/.cache/huggingface:/home/zozo/.cache/huggingface:rw \
-            $conda_mount_args \
-            $netrc_mount_args \
-            $huggingface_mount_args \
+            ${conda_mount_args:+$conda_mount_args} \
+            ${netrc_mount_args:+$netrc_mount_args} \
+            ${huggingface_mount_args:+$huggingface_mount_args} \
             --device /dev/dri:/dev/dri \
-            $mount_args \
+            ${mount_args:+$mount_args} \
             "$image_tag" \
             tail -f /dev/null
         
@@ -194,7 +194,7 @@ start_container() {
         if [ -n "$conda_env" ]; then
             docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
         else
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts && exec bash"
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && grep -q 'zobot-$ROS_DISTRO' /etc/hosts 2>/dev/null || echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts >/dev/null; exec bash"
         fi
     else
         echo -e "${GREEN}Starting new container...${NC}"
@@ -215,15 +215,16 @@ start_container() {
             --volume "$HOME/.ssh:/home/zozo/.ssh:ro" \
             --volume "/mnt/cave:/home/zozo/cave:rw" \
             --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
+            --volume "/home/zozo/workspaces/money_ws:/home/zozo/crypto_ws:rw" \
             --volume /dev:/dev:rw \
             --volume /run/udev:/run/udev:ro \
             --volume /etc/group:/etc/group:ro \
             --volume /etc/passwd:/etc/passwd:ro \
-            $conda_mount_args \
-            $netrc_mount_args \
-            $huggingface_mount_args \
+            ${conda_mount_args:+$conda_mount_args} \
+            ${netrc_mount_args:+$netrc_mount_args} \
+            ${huggingface_mount_args:+$huggingface_mount_args} \
             --device /dev/dri:/dev/dri \
-            $mount_args \
+            ${mount_args:+$mount_args} \
             "$image_tag" \
             tail -f /dev/null
         
@@ -232,7 +233,7 @@ start_container() {
         if [ -n "$conda_env" ]; then
             docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
         else
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts && exec bash"
+            docker exec -it "$container_name" bash -c "source ~/.bashrc && grep -q 'zobot-$ROS_DISTRO' /etc/hosts 2>/dev/null || echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts >/dev/null; exec bash"
         fi
     fi
 }
@@ -246,7 +247,23 @@ prune_container() {
     echo -e "${RED}Pruning container for $distro...${NC}"
     
     if container_exists "$distro"; then
-        docker cp "$container_name:/home/zozo/.anaconda/." "$conda_host_dir/"
+        # Create directory if it doesn't exist
+        mkdir -p "$conda_host_dir" || {
+            echo -e "${YELLOW}Warning: Could not create conda backup directory${NC}"
+        }
+        
+        # Check if .anaconda exists in container before copying
+        if docker exec "$container_name" test -d /home/zozo/.anaconda 2>/dev/null; then
+            echo -e "${CYAN}Backing up conda environment...${NC}"
+            if docker cp "$container_name:/home/zozo/.anaconda/." "$conda_host_dir/" 2>/dev/null; then
+                echo -e "${GREEN}Conda environment backed up successfully${NC}"
+            else
+                echo -e "${YELLOW}Warning: Failed to backup conda environment${NC}"
+            fi
+        else
+            echo -e "${YELLOW}No conda environment found in container${NC}"
+        fi
+        
         docker stop "$container_name" &> /dev/null
         docker rm "$container_name" &> /dev/null
         echo -e "${GREEN}Container removed${NC}"

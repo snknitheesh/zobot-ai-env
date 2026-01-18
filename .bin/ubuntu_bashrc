@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ~/.bashrc: executed by bash(1) for non-login shells.
-# Enhanced bashrc for zobot-ai container environment
+# Enhanced bashrc for zobot-lab container environment
 
 # If not running interactively, don't do anything
 case $- in
@@ -130,11 +130,16 @@ export MAX_JOBS=$(nproc)
 export PATH=/usr/local/cuda/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
-# Conda configuration and initialization
+# Source crypto workspace (needed for crypto_prediction msg/srv/action types in ros2 CLI)
+if [ -f "/home/zozo/.crypto_builds/install/setup.bash" ]; then
+    source "/home/zozo/.crypto_builds/install/setup.bash"
+fi
+
+# Conda configuration and initialization (DISABLED - using system Python 3.12 for ROS2)
 export PATH="/home/zozo/.anaconda/bin:$PATH"
 export CONDA_AUTO_ACTIVATE_BASE=false
 
-# Initialize conda for bash
+# Initialize conda for bash (DISABLED - using system Python 3.12 for ROS2)
 if [ -f "/home/zozo/.anaconda/etc/profile.d/conda.sh" ]; then
     . "/home/zozo/.anaconda/etc/profile.d/conda.sh"
 elif [ -f "/home/zozo/.anaconda/bin/conda" ]; then

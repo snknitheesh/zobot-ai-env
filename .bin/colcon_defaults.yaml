@@ -1,4 +1,4 @@
-# Colcon defaults for zobot-ai environment
+# Colcon defaults for zobot-lab environment
 build:
   symlink-install: true
   cmake-args:

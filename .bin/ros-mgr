@@ -28,7 +28,7 @@ vcs_import() {
     fi
     
     sudo mkdir -p "$ROS_OVERLAY_DIR"
-    sudo chown -R $USER:$USER "$ROS_OVERLAY_DIR"
+    sudo chown -R "$USER:$USER" "$ROS_OVERLAY_DIR"
     sudo chmod -R 755 "$ROS_OVERLAY_DIR"
     
     cd "$ROS_OVERLAY_DIR" || exit 1

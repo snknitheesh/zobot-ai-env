@@ -1,5 +1,5 @@
 {
-    "name": "zobot-ai",
+    "name": "zobot-lab",
     "remoteUser": "zozo",
     "build": {
         "dockerfile": "Dockerfile.ai",
