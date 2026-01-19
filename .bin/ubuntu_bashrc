@@ -205,3 +205,8 @@ done
 if [ -f "/home/zozo/zobot_ws/.bin/alias.sh" ]; then
     source "/home/zozo/zobot_ws/.bin/alias.sh"
 fi
+
+# LeRobot X Jazzy workspace setup
+# if [ -f "/home/zozo/zobot_ws/ros/lerobot_x_jazzy/setup_workspace.sh" ]; then
+#     source "/home/zozo/zobot_ws/ros/lerobot_x_jazzy/setup_workspace.sh"
+# fi

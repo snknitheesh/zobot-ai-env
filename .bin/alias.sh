@@ -67,3 +67,5 @@ alias builds="cd /home/zozo/.ros_builds"
 alias cdmount="cd /home/zozo/zobot_ws/mount"
 alias cave="cd /home/zozo/cave"
 
+# Lerobot X Jazzy workspace 
+alias lerobot_source="source /home/zozo/zobot_ws/ros/lerobot_x_jazzy/setup_workspace.sh"

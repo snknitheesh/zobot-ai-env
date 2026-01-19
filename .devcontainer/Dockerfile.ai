@@ -106,6 +106,36 @@ RUN --mount=type=cache,target=/var/cache/apt \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
+# Install Qt6 dependencies for lerobot_ui
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libxcb-cursor0 \
+        libxcb-cursor-dev \
+        libxcb-xinerama0 \
+        libxcb-xinerama0-dev \
+        libxcb-xfixes0 \
+        libxcb-xfixes0-dev \
+        libxcb-render0 \
+        libxcb-render-util0 \
+        libxcb-shape0 \
+        libxcb-shape0-dev \
+        libxcb-keysyms1 \
+        libxcb-keysyms1-dev \
+        libxcb-image0 \
+        libxcb-image0-dev \
+        libxcb-icccm4 \
+        libxcb-icccm4-dev \
+        libxcb-sync1 \
+        libxcb-sync-dev \
+        libxcb-xkb1 \
+        libxcb-xkb-dev \
+        libxkbcommon-x11-0 \
+        libxkbcommon-x11-dev \
+        libxkbcommon0 \
+        libxkbcommon-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip uninstall -y torch torchvision torchaudio && \
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 && \
@@ -113,6 +143,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --pre --upgrade --no-cache-dir torch --extra-index-url https://download.pytorch.org/whl/nightly/cu128
 
 RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install PySide6 && \
     if [ -s /tmp/additional_pip_requirements.txt ]; then \
         pip install -r /tmp/additional_pip_requirements.txt; \
     fi
@@ -154,11 +185,13 @@ COPY .bin/colcon_defaults_crypto.yaml /home/zozo/zobot_ws/.bin/colcon_defaults_c
 COPY .bin/crypto_colcon_runner.py /home/zozo/zobot_ws/.bin/crypto_colcon_runner.py
 COPY .bin/ros-mgr /home/zozo/zobot_ws/.bin/ros-mgr
 COPY .bin/req /home/zozo/zobot_ws/.bin/req
+COPY .bin/install_qt_dependencies.sh /home/zozo/zobot_ws/.bin/install_qt_dependencies.sh
 RUN chown -R $USERNAME:$USERNAME /home/zozo && \
     chmod +x /home/zozo/zobot_ws/.bin/colcon_runner.py && \
     chmod +x /home/zozo/zobot_ws/.bin/crypto_colcon_runner.py && \
     chmod +x /home/zozo/zobot_ws/.bin/ros-mgr && \
-    chmod +x /home/zozo/zobot_ws/.bin/req
+    chmod +x /home/zozo/zobot_ws/.bin/req && \
+    chmod +x /home/zozo/zobot_ws/.bin/install_qt_dependencies.sh
 
 # ROS environment setup
 ENV ROS_DISTRO=${ROS_DISTRO}
