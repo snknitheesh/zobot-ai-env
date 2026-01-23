@@ -17,7 +17,6 @@ services:
         - ROS_DISTRO=jazzy
       cache_from:
         - robotics-dev-base:latest
-        - robotics-dev:jazzy
     image: robotics-dev:jazzy
     container_name: ros2-jazzy-dev
     hostname: ros2-jazzy
