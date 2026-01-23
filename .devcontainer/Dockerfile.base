@@ -163,6 +163,12 @@ ENV CONDA_PREFIX=/opt/conda
 RUN /opt/conda/bin/conda init bash && \
     /opt/conda/bin/conda config --set auto_activate_base false
 
+# Accept Conda Terms of Service for all channels
+RUN /opt/conda/bin/conda tos accept --all-channels || true && \
+    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true && \
+    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true && \
+    /opt/conda/bin/conda update conda -y
+
 # Install PKL (Configuration Language)
 RUN curl -L -o /usr/local/bin/pkl 'https://github.com/apple/pkl/releases/download/0.30.2/pkl-linux-amd64' && \
     chmod +x /usr/local/bin/pkl
