@@ -1,0 +1,121 @@
+FROM base_ai_image:latest
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# 1. User setup - Baked into the image for isolation
+ENV USERNAME=zozo
+ENV USER_UID=1000
+ENV USER_GID=1000
+ENV HOME=/home/zozo
+ENV ZOBOT_WS=/home/zozo/zobot_ws
+
+RUN groupdel ubuntu || true && \
+    userdel -r ubuntu || true && \
+    groupadd --gid $USER_GID $USERNAME && \
+    useradd --uid $USER_UID --gid $USER_GID -m $USERNAME -s /bin/bash && \
+    usermod -aG sudo $USERNAME && \
+    echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/nopasswd && \
+    chmod 0440 /etc/sudoers.d/nopasswd
+
+# 2. System Packages (Apt) - Ordered by frequency of change
+# These rarely change, so they go at the top.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl wget git vim nano build-essential cmake pkg-config \
+        software-properties-common ca-certificates gnupg lsb-release \
+        sudo openssh-client htop tree unzip rsync \
+        libxcb-cursor0 libxcb-cursor-dev libxcb-xinerama0 libxcb-xinerama0-dev \
+        libxcb-xfixes0 libxcb-xfixes0-dev libxcb-render0 libxcb-render-util0 \
+        libxcb-shape0 libxcb-shape0-dev libxcb-keysyms1 libxcb-keysyms1-dev \
+        libxcb-image0 libxcb-image0-dev libxcb-icccm4 libxcb-icccm4-dev \
+        libxcb-sync1 libxcb-sync-dev libxcb-xkb1 libxcb-xkb-dev \
+        libxkbcommon-x11-0 libxkbcommon-x11-dev libxkbcommon0 libxkbcommon-dev \
+        speech-dispatcher \
+        python3-vcstool python3-colcon-common-extensions python3-rosdep \
+    && curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends gz-harmonic && \
+    rm -rf /var/lib/apt/lists/*
+
+# 3. Pip Requirements
+# Copy only the requirement files first to leverage caching
+COPY .requirements/additional_pip_requirements.txt /tmp/additional_pip_requirements.txt
+COPY .requirements/additional_pip_requirements_crypto.txt /tmp/additional_pip_requirements_crypto.txt
+
+# Filter out packages already in base (torch, tensorflow) to avoid conflicts or re-installs
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --upgrade pip setuptools && \
+    pip3 install PySide6 && \
+    if [ -s /tmp/additional_pip_requirements.txt ]; then \
+        pip3 install -r /tmp/additional_pip_requirements.txt; \
+    fi && \
+    # Remove lines containing torch, tensorflow, etc. from crypto requirements as we already have them in base
+    sed -i '/torch/d' /tmp/additional_pip_requirements_crypto.txt && \
+    sed -i '/tensorflow/d' /tmp/additional_pip_requirements_crypto.txt && \
+    sed -i '/torchaudio/d' /tmp/additional_pip_requirements_crypto.txt && \
+    sed -i '/torchvision/d' /tmp/additional_pip_requirements_crypto.txt && \
+    sed -i '/tf-keras/d' /tmp/additional_pip_requirements_crypto.txt && \
+    if [ -s /tmp/additional_pip_requirements_crypto.txt ]; then \
+        pip3 install -r /tmp/additional_pip_requirements_crypto.txt; \
+    fi
+
+# 4. Workspace setup and configuration
+RUN mkdir -p $ZOBOT_WS && \
+    mkdir -p /home/zozo/.ros_builds && \
+    mkdir -p /home/zozo/mount && \
+    mkdir -p /home/zozo/cave && \
+    mkdir -p /opt/ros/ros_ws && \
+    chown -R $USERNAME:$USERNAME /home/zozo && \
+    chown -R $USERNAME:$USERNAME /opt/ros/ros_ws && \
+    chmod -R 755 /opt/ros/ros_ws
+
+# Copy .bin scripts (more likely to change)
+COPY --chown=$USERNAME:$USERNAME .bin/ /home/zozo/zobot_ws/.bin/
+COPY --chown=$USERNAME:$USERNAME .bin/ubuntu_bashrc /home/zozo/.bashrc
+
+# Fix paths in bashrc to use /opt/conda instead of /home/zozo/.anaconda
+RUN sed -i 's/\/home\/zozo\/.anaconda/\/opt\/conda/g' /home/zozo/.bashrc && \
+    chmod +x /home/zozo/zobot_ws/.bin/*.py /home/zozo/zobot_ws/.bin/ros-mgr /home/zozo/zobot_ws/.bin/req /home/zozo/zobot_ws/.bin/install_qt_dependencies.sh || true
+
+# 5. VCS Import & Build (Most likely to change)
+USER $USERNAME
+WORKDIR $ZOBOT_WS
+
+COPY --chown=$USERNAME:$USERNAME .requirements/depend.repos /tmp/depend.repos
+RUN if [ -s /tmp/depend.repos ] && [ "$(grep -c '^\s*[^#]' /tmp/depend.repos)" -gt 0 ]; then \
+        cd /opt/ros/ros_ws && \
+        vcs import . < /tmp/depend.repos; \
+    fi
+
+# Build imported repos
+RUN if [ -d "/opt/ros/ros_ws" ] && [ "$(find /opt/ros/ros_ws -maxdepth 2 -name "*.xml" -o -name "CMakeLists.txt" -o -name "setup.py" | wc -l)" -gt 0 ]; then \
+        echo "🔨 Building imported repositories..." && \
+        /bin/bash -c "source /opt/ros/jazzy/setup.bash && \
+        colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
+            --base-paths /opt/ros/ros_ws \
+            --build-base /home/zozo/.ros_builds/build \
+            --install-base /home/zozo/.ros_builds/install"; \
+    fi
+
+# 6. Final Env vars and setup
+ENV RCUTILS_CONSOLE_OUTPUT_FORMAT="[{severity}]: {message}"
+ENV RCUTILS_COLORIZED_OUTPUT=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV CARB_AUDIO_DISABLE=1
+ENV MAX_JOBS=8
+ENV ROS_DISTRO=jazzy
+ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
+
+# Source bashrc additions
+RUN echo 'source /home/zozo/zobot_ws/.bin/alias.sh' >> /home/zozo/.bashrc
+
+# Final verification stage (to be run during build)
+RUN echo "=== FINAL VERIFICATION ===" && \
+    /usr/local/bin/python3 -c "import torch; import tensorflow; import PySide6; print('AI Frameworks OK')" && \
+    /opt/conda/bin/conda --version && \
+    /usr/local/bin/pkl --version && \
+    /bin/bash -c "source /opt/ros/jazzy/setup.bash && ros2 doctor --report | grep 'RMW MIDDLEWARE'" && \
+    echo "=== ALL SYSTEMS GO ==="

@@ -1,0 +1,196 @@
+# syntax=docker/dockerfile:1
+FROM nvcr.io/nvidia/cuda:13.0.2-devel-ubuntu24.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/usr/local/bin:/usr/lib/ccache:$PATH"
+ENV CCACHE_DIR=/root/.cache/ccache
+ENV CCACHE_MAXSIZE=10G
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install build dependencies with apt cache mount
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    wget \
+    libssl-dev \
+    zlib1g-dev \
+    libncurses5-dev \
+    libncursesw5-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    libgdbm-dev \
+    libdb5.3-dev \
+    libbz2-dev \
+    libexpat1-dev \
+    liblzma-dev \
+    libffi-dev \
+    uuid-dev \
+    cmake \
+    ninja-build \
+    libopenblas-dev \
+    liblapack-dev \
+    libpng-dev \
+    libjpeg-dev \
+    ccache \
+    # NVIDIA Libraries (cuDNN, TensorRT)
+    libcudnn9-cuda-13 \
+    libcudnn9-dev-cuda-13 \
+    libnvinfer-dev \
+    libnvinfer-plugin-dev \
+    vim-common \
+    && rm -rf /var/lib/apt/lists/*
+
+    
+# Download and compile Python 3.12.12
+WORKDIR /tmp
+RUN wget https://www.python.org/ftp/python/3.12.12/Python-3.12.12.tgz \
+    && tar -xf Python-3.12.12.tgz \
+    && cd Python-3.12.12 \
+    && ./configure --enable-optimizations \
+    && make -j$(nproc) \
+    && make install \
+    && cd .. \
+    && rm -rf Python-3.12.12 Python-3.12.12.tgz
+
+# Update symlinks
+RUN ln -sf /usr/local/bin/python3.12 /usr/bin/python3 && \
+    ln -sf /usr/local/bin/python3.12 /usr/bin/python && \
+    ln -sf /usr/local/bin/pip3.12 /usr/bin/pip3 && \
+    ln -sf /usr/local/bin/pip3.12 /usr/bin/pip
+
+# PEP 668: Mark this environment as externally managed
+# This prevents pip from installing packages into the system environment
+# Users must use a virtual environment or conda.
+RUN mkdir -p /usr/local/lib/python3.12/site-packages
+RUN echo "[externally-managed]\nError=This system-wide Python installation is managed by the base Docker image. Please use a virtual environment or conda for your own packages." > /usr/local/lib/python3.12/EXTERNALLY-MANAGED
+
+# Allow breaking system packages during build
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
+# Install python build dependencies for PyTorch (pip cache mount)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --no-cache-dir numpy pyyaml typing_extensions setuptools wheel
+
+# Clone and build PyTorch with ccache
+WORKDIR /tmp
+RUN git clone --recursive https://github.com/pytorch/pytorch.git
+WORKDIR /tmp/pytorch
+ENV TORCH_CUDA_ARCH_LIST="12.0"
+ENV CMAKE_PREFIX_PATH="/usr/local"
+# Mount ccache directory
+RUN --mount=type=cache,target=/root/.cache/ccache \
+    --mount=type=cache,target=/root/.cache/pip \
+    pip3 install . --no-build-isolation
+
+# Clone and build Torchvision with ccache
+WORKDIR /tmp
+RUN git clone https://github.com/pytorch/vision.git
+WORKDIR /tmp/vision
+RUN --mount=type=cache,target=/root/.cache/ccache \
+    --mount=type=cache,target=/root/.cache/pip \
+    pip3 install . --no-build-isolation
+
+# TensorFlow install
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --no-cache-dir tensorflow
+
+# Install ROS 2 Jazzy
+ENV ROS_DISTRO=jazzy
+ENV AMENT_PREFIX_PATH=/opt/ros/jazzy
+ENV COLCON_PREFIX_PATH=/opt/ros/jazzy
+ENV LD_LIBRARY_PATH=/opt/ros/jazzy/lib:/opt/ros/jazzy/opt/zenoh_cpp_vendor/lib:$LD_LIBRARY_PATH
+ENV PATH=/opt/ros/jazzy/bin:$PATH
+ENV PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages
+ENV ROS_PYTHON_VERSION=3
+ENV ROS_VERSION=2
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    locales \
+    && locale-gen en_US en_US.UTF-8 \
+    && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
+    && add-apt-repository universe \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gnupg2 \
+    lsb-release \
+    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    ros-jazzy-ros-base \
+    ros-dev-tools \
+    ros-jazzy-ament-cmake-vendor-package \
+    cargo \
+    rustc \
+    nlohmann-json3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies for ROS build tools
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install catkin_pkg
+
+# Build rmw_zenoh from source
+WORKDIR /tmp/ros2_ws
+RUN mkdir -p src && \
+    cd src && \
+    git clone https://github.com/ros2/rmw_zenoh.git --branch jazzy
+
+# Source ROS environment and build with merge-install
+RUN --mount=type=cache,target=/root/.cache/ccache \
+    /bin/bash -c "source /opt/ros/jazzy/setup.bash && \
+    colcon build --merge-install --install-base /opt/ros/jazzy --cmake-args -DCMAKE_BUILD_TYPE=Release"
+
+# Set RMW Implementation to Zenoh
+ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
+
+# Install Miniconda
+WORKDIR /tmp
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh && \
+    bash miniconda.sh -b -p /opt/conda && \
+    rm miniconda.sh
+
+ENV PATH=/usr/local/bin:/opt/ros/jazzy/bin:/opt/conda/bin:$PATH
+ENV CONDA_PREFIX=/opt/conda
+
+# Initialize conda for bash
+RUN /opt/conda/bin/conda init bash && \
+    /opt/conda/bin/conda config --set auto_activate_base false
+
+# Install PKL (Configuration Language)
+RUN curl -L -o /usr/local/bin/pkl 'https://github.com/apple/pkl/releases/download/0.30.2/pkl-linux-amd64' && \
+    chmod +x /usr/local/bin/pkl
+
+# Cleanup build artifacts
+WORKDIR /
+RUN rm -rf /tmp/pytorch /tmp/vision /tmp/tensorflow /tmp/tensorflow_pkg /tmp/ros2_ws
+
+# Comprehensive verification  
+# Use explicit paths: /usr/local/bin/python3 for PyTorch/TF (Python 3.12.12)
+RUN echo "=== Verifying Source-Built Python 3.12.12 ===" && \
+    /usr/local/bin/python3 --version && \
+    /usr/local/bin/pip3 --version && \
+    echo "" && \
+    echo "=== Verifying PyTorch ===" && \
+    /usr/local/bin/python3 -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA Available: {torch.cuda.is_available()}'); print(f'CUDA Version: {torch.version.cuda}')" && \
+    echo "" && \
+    echo "=== Verifying TensorFlow ===" && \
+    /usr/local/bin/python3 -c "import tensorflow as tf; print(f'TensorFlow: {tf.__version__}')" && \
+    echo "" && \
+    echo "=== Verifying Conda ==="  && \
+    /opt/conda/bin/conda --version && \
+    /opt/conda/bin/conda info --envs && \
+    echo "" && \
+    echo "=== Verifying PKL ===" && \
+    pkl --version && \
+    echo "" && \
+    echo "=== Verifying ROS 2 ===" && \
+    bash -c "source /opt/ros/jazzy/setup.bash && ros2 pkg list | head -n 3" && \
+    echo "" && \
+    echo "=== All verifications passed ==="
