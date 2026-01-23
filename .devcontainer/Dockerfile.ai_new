@@ -75,9 +75,14 @@ RUN mkdir -p $ZOBOT_WS && \
 COPY --chown=$USERNAME:$USERNAME .bin/ /home/zozo/zobot_ws/.bin/
 COPY --chown=$USERNAME:$USERNAME .bin/ubuntu_bashrc /home/zozo/.bashrc
 
+# Copy package display script and entrypoint
+COPY .devcontainer/show_packages.sh /usr/local/bin/show_packages.sh
+COPY .devcontainer/docker_entrypoint.sh /usr/local/bin/docker_entrypoint.sh
+
 # Fix paths in bashrc to use /opt/conda instead of /home/zozo/.anaconda
 RUN sed -i 's/\/home\/zozo\/.anaconda/\/opt\/conda/g' /home/zozo/.bashrc && \
-    chmod +x /home/zozo/zobot_ws/.bin/*.py /home/zozo/zobot_ws/.bin/ros-mgr /home/zozo/zobot_ws/.bin/req /home/zozo/zobot_ws/.bin/install_qt_dependencies.sh || true
+    chmod +x /home/zozo/zobot_ws/.bin/*.py /home/zozo/zobot_ws/.bin/ros-mgr /home/zozo/zobot_ws/.bin/req /home/zozo/zobot_ws/.bin/install_qt_dependencies.sh || true && \
+    chmod +x /usr/local/bin/show_packages.sh /usr/local/bin/docker_entrypoint.sh
 
 # 5. VCS Import & Build 
 USER $USERNAME
@@ -109,7 +114,13 @@ ENV ROS_DISTRO=jazzy
 ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
 
 # Source bashrc additions
-RUN echo 'source /home/zozo/zobot_ws/.bin/alias.sh' >> /home/zozo/.bashrc
+RUN echo 'source /home/zozo/zobot_ws/.bin/alias.sh' >> /home/zozo/.bashrc && \
+    echo '' >> /home/zozo/.bashrc && \
+    echo '# Show packages on interactive shell start (once per container)' >> /home/zozo/.bashrc && \
+    echo 'if [ -n "$PS1" ] && [ ! -f /tmp/.packages_shown ]; then' >> /home/zozo/.bashrc && \
+    echo '    touch /tmp/.packages_shown' >> /home/zozo/.bashrc && \
+    echo '    /usr/local/bin/show_packages.sh' >> /home/zozo/.bashrc && \
+    echo 'fi' >> /home/zozo/.bashrc
 
 # Final verification stage (to be run during build)
 RUN echo "=== FINAL VERIFICATION ===" && \
@@ -118,3 +129,7 @@ RUN echo "=== FINAL VERIFICATION ===" && \
     /usr/local/bin/pkl --version && \
     /bin/bash -c "source /opt/ros/jazzy/setup.bash && ros2 doctor --report | grep 'RMW MIDDLEWARE'" && \
     echo "=== ALL SYSTEMS GO ==="
+
+# Override entrypoint to show packages instead of CUDA version
+ENTRYPOINT ["/usr/local/bin/docker_entrypoint.sh"]
+CMD ["/bin/bash"]
