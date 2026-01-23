@@ -126,6 +126,11 @@ ENV PATH="/root/.pixi/bin:/root/.cargo/bin:/root/.local/bin:$PATH"
 USER $USERNAME
 ENV PATH="/home/zozo/.pixi/bin:/home/zozo/.cargo/bin:/home/zozo/.local/bin:$PATH"
 
+# Accept Conda Terms of Service for zozo user
+RUN /opt/conda/bin/conda tos accept --all-channels || true && \
+    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true && \
+    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
+
 # 7. Final Env vars and setup
 ENV RCUTILS_CONSOLE_OUTPUT_FORMAT="[{severity}]: {message}"
 ENV RCUTILS_COLORIZED_OUTPUT=1
