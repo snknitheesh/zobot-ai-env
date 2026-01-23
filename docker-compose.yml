@@ -94,8 +94,12 @@ services:
     ipc: host
     privileged: true
     
-    # User
+    # User (with supplementary groups for device access)
     user: "1000:1000"
+    group_add:
+      - dialout
+      - tty
+      - video
     working_dir: /home/zozo/zobot_ws
     
     # Keep container running
