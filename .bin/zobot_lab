@@ -119,6 +119,23 @@ start_container() {
     
     cd "$WORKSPACE_ROOT" || exit 1
     
+    # Check if images exist
+    if ! docker image inspect "robotics-dev-base:latest" &> /dev/null; then
+        echo -e "${YELLOW}Base image not found. Building images first...${NC}"
+        if ! build_images "$distro" false; then
+            echo -e "${RED}Failed to build images${NC}"
+            return 1
+        fi
+    fi
+    
+    if ! docker image inspect "robotics-dev:${distro}" &> /dev/null; then
+        echo -e "${YELLOW}${distro} image not found. Building images first...${NC}"
+        if ! build_images "$distro" false; then
+            echo -e "${RED}Failed to build images${NC}"
+            return 1
+        fi
+    fi
+    
     # Start container in background
     if docker compose --profile "$distro" up -d "ros2-${distro}"; then
         echo -e "${GREEN}Container started${NC}"
@@ -148,17 +165,29 @@ prune_containers() {
     
     cd "$WORKSPACE_ROOT" || exit 1
     
-    # Stop and remove containers
-    docker compose --profile "$distro" down
+    # Stop and remove containers using docker compose
+    docker compose --profile "$distro" down --remove-orphans
+    
+    # Also manually stop and remove any orphaned containers with the expected name
+    local container_name="ros2-${distro}-dev"
+    if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
+        echo -e "${YELLOW}Removing orphaned container: ${container_name}${NC}"
+        docker stop "$container_name" 2>/dev/null || true
+        docker rm "$container_name" 2>/dev/null || true
+    fi
     
     # Remove images
-    docker rmi "robotics-dev:${distro}" 2>/dev/null || true
+    if docker image inspect "robotics-dev:${distro}" &> /dev/null; then
+        docker rmi "robotics-dev:${distro}" 2>/dev/null || true
+    fi
     
     # If pruning specific distro, ask about base image
     read -p "Remove base image? (y/N) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        docker rmi robotics-dev-base:latest 2>/dev/null || true
+        if docker image inspect "robotics-dev-base:latest" &> /dev/null; then
+            docker rmi robotics-dev-base:latest 2>/dev/null || true
+        fi
     fi
     
     echo -e "${GREEN}Pruning complete${NC}"
