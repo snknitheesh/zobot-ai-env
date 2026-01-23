@@ -141,6 +141,12 @@ ENV ROS_DISTRO=${ROS_DISTRO}
 ENV ROS_DOMAIN_ID=1
 ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
 
+# Configure ccache for zozo user
+ENV CCACHE_DIR=/home/zozo/.cache/ccache
+ENV CCACHE_MAXSIZE=10G
+RUN mkdir -p /home/zozo/.cache/ccache && \
+    chown -R $USERNAME:$USERNAME /home/zozo/.cache
+
 # Source bashrc additions
 RUN echo 'source /home/zozo/zobot_ws/.dev/alias.sh' >> /home/zozo/.bashrc && \
     echo '' >> /home/zozo/.bashrc && \
