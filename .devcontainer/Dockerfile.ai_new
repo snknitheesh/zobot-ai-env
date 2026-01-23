@@ -17,8 +17,7 @@ RUN groupdel ubuntu || true && \
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/nopasswd && \
     chmod 0440 /etc/sudoers.d/nopasswd
 
-# 2. System Packages (Apt) - Ordered by frequency of change
-# These rarely change, so they go at the top.
+# 2. System Packages 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
@@ -72,7 +71,7 @@ RUN mkdir -p $ZOBOT_WS && \
     chown -R $USERNAME:$USERNAME /opt/ros/ros_ws && \
     chmod -R 755 /opt/ros/ros_ws
 
-# Copy .bin scripts (more likely to change)
+# Copy .bin scripts
 COPY --chown=$USERNAME:$USERNAME .bin/ /home/zozo/zobot_ws/.bin/
 COPY --chown=$USERNAME:$USERNAME .bin/ubuntu_bashrc /home/zozo/.bashrc
 
@@ -80,7 +79,7 @@ COPY --chown=$USERNAME:$USERNAME .bin/ubuntu_bashrc /home/zozo/.bashrc
 RUN sed -i 's/\/home\/zozo\/.anaconda/\/opt\/conda/g' /home/zozo/.bashrc && \
     chmod +x /home/zozo/zobot_ws/.bin/*.py /home/zozo/zobot_ws/.bin/ros-mgr /home/zozo/zobot_ws/.bin/req /home/zozo/zobot_ws/.bin/install_qt_dependencies.sh || true
 
-# 5. VCS Import & Build (Most likely to change)
+# 5. VCS Import & Build 
 USER $USERNAME
 WORKDIR $ZOBOT_WS
 
