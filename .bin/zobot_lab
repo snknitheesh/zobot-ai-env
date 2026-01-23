@@ -68,6 +68,9 @@ setup_env() {
         export CONDA_MOUNT="/tmp/empty"
     fi
     
+    # Ensure conda environments directory exists on host
+    mkdir -p /mnt/cave/.conda_docker 2>/dev/null || true
+    
     # Ensure DISPLAY is set
     export DISPLAY="${DISPLAY:-:0}"
     
