@@ -15,6 +15,8 @@ RUN groupdel ubuntu || true && \
     groupadd --gid $USER_GID $USERNAME && \
     useradd --uid $USER_UID --gid $USER_GID -m $USERNAME -s /bin/bash && \
     usermod -aG sudo $USERNAME && \
+    usermod -aG dialout $USERNAME && \
+    usermod -aG tty $USERNAME && \
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/nopasswd && \
     chmod 0440 /etc/sudoers.d/nopasswd
 
