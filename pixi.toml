@@ -1,0 +1,95 @@
+[project]
+name = "zobot-lab"
+version = "0.1.0"
+description = "Zobot Lab - AI-powered Robotics Development Environment"
+authors = ["Zozo <zozo@zobot.ai>"]
+channels = ["conda-forge", "pytorch", "nvidia"]
+platforms = ["linux-64"]
+
+[dependencies]
+# Python
+python = "3.12.*"
+
+# ROS 2 (Note: RoboStack experimental, may need manual installation)
+# ros-jazzy-desktop = "*"  # Uncomment when RoboStack supports Jazzy
+
+# Deep Learning Frameworks
+pytorch = ">=2.0"
+pytorch-cuda = "13.0.*"
+torchvision = "*"
+tensorflow = ">=2.0"
+
+# Scientific Computing
+numpy = "*"
+scipy = "*"
+pandas = "*"
+matplotlib = "*"
+
+# ML/AI Libraries
+scikit-learn = "*"
+transformers = "*"
+sentence-transformers = "*"
+
+# GUI
+pyside6 = "*"
+
+# Computer Vision
+opencv = "*"
+pillow = "*"
+
+# Data Processing
+h5py = "*"
+
+# Development Tools
+ipython = "*"
+jupyter = "*"
+pytest = "*"
+
+# CUDA Toolkit (if needed)
+# cudatoolkit = "13.0.*"
+
+[tasks]
+# Build tasks
+build = "colcon build --symlink-install"
+build-release = "colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release"
+build-debug = "colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Debug"
+
+# Test tasks
+test = "colcon test"
+test-result = "colcon test-result --verbose"
+
+# Clean tasks
+clean = "rm -rf build/ install/ log/"
+clean-all = "rm -rf build/ install/ log/ .ros_builds/"
+
+# Development tasks
+shell = "bash"
+python = "python3"
+ipython = "ipython"
+
+# ROS tasks
+ros-doctor = "ros2 doctor --report"
+ros-topics = "ros2 topic list"
+ros-nodes = "ros2 node list"
+
+# Package management
+list = "pixi list"
+update = "pixi update"
+info = "pixi info"
+
+[feature.dev.dependencies]
+# Development-only dependencies
+black = "*"
+ruff = "*"
+mypy = "*"
+pre-commit = "*"
+
+[feature.gpu.dependencies]
+# GPU-specific dependencies
+cuda-toolkit = "13.0.*"
+cudnn = "*"
+
+[environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+gpu = { features = ["gpu"], solve-group = "default" }

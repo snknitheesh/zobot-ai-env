@@ -7,6 +7,7 @@ WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
 # Export for use in subshells
 export WORKSPACE_ROOT
 export WORKSPACE_BIN="/home/zozo/zobot_ws/.bin"
+export WORKSPACE_DEV="/home/zozo/zobot_ws/.dev"
 
 alias cr="python3 /home/zozo/zobot_ws/.bin/colcon_runner.py"
 alias req="/home/zozo/zobot_ws/.bin/req"
@@ -19,16 +20,6 @@ alias crt="cr t"     # Test all
 alias crc="cr c"     # Clean all
 alias crp="cr p"     # List packages
 alias crh="cr h"     # Help
-
-# Crypto workspace specific aliases
-alias crcrypto="python3 /home/zozo/zobot_ws/.bin/crypto_colcon_runner.py"
-alias crcb="crcrypto b"      # Build all crypto packages
-alias crct="crcrypto t"      # Test all crypto packages  
-alias crcc="crcrypto c"      # Clean crypto builds
-alias crcp="crcrypto p"      # List crypto packages
-alias crch="crcrypto h"      # Crypto help
-alias cryptows="cd /home/zozo/crypto_ws"  # Navigate to crypto workspace
-
 
 # Development aliases
 alias pycheck="python -m py_compile"
@@ -61,7 +52,7 @@ alias roslaunch="ros2 launch"
 
 # Workspace navigation
 alias ws="cd /home/zozo/zobot_ws"
-alias rosws="cd /home/zozo/zobot_ws/ros"
+alias roscd="cd /home/zozo/zobot_ws/ros"
 alias logs="cd /home/zozo/.ros_builds/log"
 alias builds="cd /home/zozo/.ros_builds"
 alias cdmount="cd /home/zozo/zobot_ws/mount"

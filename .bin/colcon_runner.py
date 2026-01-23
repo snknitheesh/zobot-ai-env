@@ -38,7 +38,7 @@ class ColconRunner:
         self.build_dir.mkdir(exist_ok=True)
         self.ros_folder.mkdir(exist_ok=True)
         
-        self.ros_distro = os.environ.get('ROS_DISTRO', 'humble')
+        self.ros_distro = os.environ.get('ROS_DISTRO', 'jazzy')
         
     def print_colored(self, message: str, color: str = Colors.NC):
         """Print colored message"""
@@ -236,7 +236,6 @@ class ColconRunner:
   t <pkg>...     Test specific package(s)
   c, ca          Clean all build artifacts
   p              List all available packages
-  crypto         Manage crypto prediction workspace (separate)
   h              Show this help
 
 {Colors.GREEN}Examples:{Colors.NC}
@@ -248,7 +247,6 @@ class ColconRunner:
   cr t my_package          # Test specific package
   cr ca                    # Clean all builds
   cr p                     # List packages
-  cr crypto ba             # Build crypto workspace
 
 {Colors.GREEN}Build Directory:{Colors.NC}
   {self.build_dir}
@@ -267,19 +265,6 @@ def main():
         return 0
     
     command = sys.argv[1].lower()
-    
-    # Special case: redirect 'crypto' to crypto_colcon_runner
-    if command == 'crypto':
-        crypto_runner_path = Path(__file__).parent / "crypto_colcon_runner.py"
-        if crypto_runner_path.exists():
-            # Pass remaining args to crypto runner
-            args = sys.argv[2:] if len(sys.argv) > 2 else []
-            cmd = [str(crypto_runner_path)] + args
-            result = subprocess.run(cmd)
-            return result.returncode
-        else:
-            runner.print_colored("Crypto runner not found!", Colors.RED)
-            return 1
     
     packages = sys.argv[2:] if len(sys.argv) > 2 else []
     

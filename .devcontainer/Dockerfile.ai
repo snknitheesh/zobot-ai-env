@@ -1,172 +1,58 @@
-ARG ROS_DISTRO=jazzy
-ARG BASE_IMAGE_HUMBLE=rwthika/ros2-ml:humble
-ARG BASE_IMAGE_JAZZY=rwthika/ros2-ml:jazzy
-ARG BASE_IMAGE=${BASE_IMAGE_HUMBLE}
-
-#################################################################################################################################
-# UNDERLAY BUILD - Base system setup
-#################################################################################################################################
-FROM ${BASE_IMAGE} AS underlay-builder
+FROM robotics-dev-base:latest
 
 ARG DEBIAN_FRONTEND=noninteractive
+ARG ROS_DISTRO=jazzy
 
-# User configuration
+# 1. User setup - Baked into the image for isolation
 ENV USERNAME=zozo
 ENV USER_UID=1000
 ENV USER_GID=1000
 ENV HOME=/home/zozo
 ENV ZOBOT_WS=/home/zozo/zobot_ws
 
-# GPU and display configuration
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV NVIDIA_DRIVER_CAPABILITIES=all
-ENV DISPLAY=:0
-ENV QT_X11_NO_MITSHM=1
-
-# Sudo privileges
-RUN groupadd --gid $USER_GID $USERNAME && \
+RUN groupdel ubuntu || true && \
+    userdel -r ubuntu || true && \
+    groupadd --gid $USER_GID $USERNAME && \
     useradd --uid $USER_UID --gid $USER_GID -m $USERNAME -s /bin/bash && \
     usermod -aG sudo $USERNAME && \
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/nopasswd && \
     chmod 0440 /etc/sudoers.d/nopasswd
 
-# Install essential system packages
-RUN --mount=type=cache,target=/var/cache/apt \
+# 2. System Packages 
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        curl \
-        wget \
-        git \
-        vim \
-        nano \
-        build-essential \
-        cmake \
-        pkg-config \
-        software-properties-common \
-        ca-certificates \
-        gnupg \
-        lsb-release \
-        sudo \
-        openssh-client \
-        htop \
-        tree \
-        unzip \
-        rsync \
-    && rm -rf /var/lib/apt/lists/*
-
-#################################################################################################################################
-# CONDA INSTALLATION 
-#################################################################################################################################
-FROM underlay-builder AS conda-builder
-
-USER $USERNAME
-WORKDIR /home/zozo
-
-RUN --mount=type=cache,target=/tmp/conda,uid=1000,gid=1000 \
-    wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/conda/miniconda.sh && \
-    bash /tmp/conda/miniconda.sh -b -p /home/zozo/.anaconda && \
-    rm -f /tmp/conda/miniconda.sh && \
-    /home/zozo/.anaconda/bin/conda clean -afy
-
-USER root
-
-# Conda setup (PATH disabled to use system Python 3.12 for ROS2)
-RUN /home/zozo/.anaconda/bin/conda tos accept --all-channels || true && \
-    /home/zozo/.anaconda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true && \
-    /home/zozo/.anaconda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true && \
-    /home/zozo/.anaconda/bin/conda config --system --set auto_activate_base false && \
-    /home/zozo/.anaconda/bin/conda update conda -y
-
-#################################################################################################################################
-# REQUIREMENTS BUILDER 
-#################################################################################################################################
-FROM conda-builder AS requirements-builder
-
-COPY .requirements/additional_ros_requirements.txt /tmp/additional_ros_requirements.txt
-COPY .requirements/additional_pip_requirements.txt /tmp/additional_pip_requirements.txt
-COPY .requirements/additional_deb_requirements.txt /tmp/additional_deb_requirements.txt
-COPY .requirements/depend.repos /tmp/depend.repos
-
-RUN --mount=type=cache,target=/var/cache/apt \
-    if [ -s /tmp/additional_ros_requirements.txt ]; then \
-        apt-get update && \
-        grep -vE '^\s*#|^\s*$' /tmp/additional_ros_requirements.txt | xargs apt-get install -y && \
-        rm -rf /var/lib/apt/lists/*; \
-    fi
-
-# Initialize rosdep if it's installed
-RUN if command -v rosdep >/dev/null 2>&1; then \
-        rosdep init || true; \
-    fi
-
-RUN --mount=type=cache,target=/var/cache/apt \
-    if [ -s /tmp/additional_deb_requirements.txt ]; then \
-        apt-get update && \
-        grep -vE '^\s*#|^\s*$' /tmp/additional_deb_requirements.txt | xargs apt-get install -y && \
-        rm -rf /var/lib/apt/lists/*; \
-    fi
-
-# Install Qt6 dependencies for lerobot_ui
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libxcb-cursor0 \
-        libxcb-cursor-dev \
-        libxcb-xinerama0 \
-        libxcb-xinerama0-dev \
-        libxcb-xfixes0 \
-        libxcb-xfixes0-dev \
-        libxcb-render0 \
-        libxcb-render-util0 \
-        libxcb-shape0 \
-        libxcb-shape0-dev \
-        libxcb-keysyms1 \
-        libxcb-keysyms1-dev \
-        libxcb-image0 \
-        libxcb-image0-dev \
-        libxcb-icccm4 \
-        libxcb-icccm4-dev \
-        libxcb-sync1 \
-        libxcb-sync-dev \
-        libxcb-xkb1 \
-        libxcb-xkb-dev \
-        libxkbcommon-x11-0 \
-        libxkbcommon-x11-dev \
-        libxkbcommon0 \
-        libxkbcommon-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip uninstall -y torch torchvision torchaudio && \
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 && \
-    pip install --pre --upgrade --no-cache-dir torchvision --extra-index-url https://download.pytorch.org/whl/nightly/cu128 && \
-    pip install --pre --upgrade --no-cache-dir torch --extra-index-url https://download.pytorch.org/whl/nightly/cu128
-
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install PySide6 && \
-    if [ -s /tmp/additional_pip_requirements.txt ]; then \
-        pip install -r /tmp/additional_pip_requirements.txt; \
-    fi
-
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install --upgrade pip setuptools && \
-    python3 -m pip install --upgrade colcon-core colcon-common-extensions
-
-#################################################################################################################################
-# Simulation BUILD
-#################################################################################################################################
-FROM requirements-builder AS sim-builder
-
-RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
+        curl wget git vim nano build-essential cmake pkg-config \
+        software-properties-common ca-certificates gnupg lsb-release \
+        sudo openssh-client htop tree unzip rsync \
+        libxcb-cursor0 libxcb-cursor-dev libxcb-xinerama0 libxcb-xinerama0-dev \
+        libxcb-xfixes0 libxcb-xfixes0-dev libxcb-render0 libxcb-render-util0 \
+        libxcb-shape0 libxcb-shape0-dev libxcb-keysyms1 libxcb-keysyms1-dev \
+        libxcb-image0 libxcb-image0-dev libxcb-icccm4 libxcb-icccm4-dev \
+        libxcb-sync1 libxcb-sync-dev libxcb-xkb1 libxcb-xkb-dev \
+        libxkbcommon-x11-0 libxkbcommon-x11-dev libxkbcommon0 libxkbcommon-dev \
+        speech-dispatcher \
+        python3-vcstool python3-colcon-common-extensions python3-rosdep \
+    && curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null && \
     apt-get update && \
-    apt-get install gz-harmonic -y
+    apt-get install -y --no-install-recommends gz-harmonic && \
+    rm -rf /var/lib/apt/lists/*
 
-#################################################################################################################################
-# OVERLAY BUILD
-#################################################################################################################################
-FROM sim-builder AS overlay-builder
+# 3. Pip Requirements
+# Copy only the requirement files first to leverage caching
+COPY .requirements/additional_pip_requirements.txt /tmp/additional_pip_requirements.txt
 
+# Install additional pip requirements
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --upgrade pip setuptools && \
+    pip3 install PySide6 && \
+    if [ -s /tmp/additional_pip_requirements.txt ]; then \
+        pip3 install -r /tmp/additional_pip_requirements.txt; \
+    fi
+
+# 4. Workspace setup and configuration
 RUN mkdir -p $ZOBOT_WS && \
     mkdir -p /home/zozo/.ros_builds && \
     mkdir -p /home/zozo/mount && \
@@ -176,63 +62,97 @@ RUN mkdir -p $ZOBOT_WS && \
     chown -R $USERNAME:$USERNAME /opt/ros/ros_ws && \
     chmod -R 755 /opt/ros/ros_ws
 
-# Copy configuration files
-COPY .bin/ubuntu_bashrc /home/zozo/.bashrc
-COPY .bin/alias.sh /home/zozo/zobot_ws/.bin/alias.sh
-COPY .bin/colcon_runner.py /home/zozo/zobot_ws/.bin/colcon_runner.py
-COPY .bin/colcon_defaults.yaml /home/zozo/zobot_ws/.bin/colcon_defaults.yaml
-COPY .bin/colcon_defaults_crypto.yaml /home/zozo/zobot_ws/.bin/colcon_defaults_crypto.yaml
-COPY .bin/crypto_colcon_runner.py /home/zozo/zobot_ws/.bin/crypto_colcon_runner.py
-COPY .bin/ros-mgr /home/zozo/zobot_ws/.bin/ros-mgr
-COPY .bin/req /home/zozo/zobot_ws/.bin/req
-COPY .bin/install_qt_dependencies.sh /home/zozo/zobot_ws/.bin/install_qt_dependencies.sh
-RUN chown -R $USERNAME:$USERNAME /home/zozo && \
-    chmod +x /home/zozo/zobot_ws/.bin/colcon_runner.py && \
-    chmod +x /home/zozo/zobot_ws/.bin/crypto_colcon_runner.py && \
-    chmod +x /home/zozo/zobot_ws/.bin/ros-mgr && \
-    chmod +x /home/zozo/zobot_ws/.bin/req && \
-    chmod +x /home/zozo/zobot_ws/.bin/install_qt_dependencies.sh
+# Copy .bin scripts
+COPY --chown=$USERNAME:$USERNAME .bin/ /home/zozo/zobot_ws/.bin/
+COPY --chown=$USERNAME:$USERNAME .bin/ubuntu_bashrc /home/zozo/.bashrc
 
-# ROS environment setup
-ENV ROS_DISTRO=${ROS_DISTRO}
-ENV RCUTILS_CONSOLE_OUTPUT_FORMAT="[{severity}]: {message}"
-ENV RCUTILS_COLORIZED_OUTPUT=1
-ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV CARB_AUDIO_DISABLE=1
-ENV MAX_JOBS=8
+# Copy package display script and entrypoint
+COPY .dev/show_packages.sh /usr/local/bin/show_packages.sh
+COPY .dev/docker_entrypoint.sh /usr/local/bin/docker_entrypoint.sh
 
-RUN usermod -a -G dialout zozo
+# Fix paths in bashrc to use /opt/conda instead of /home/zozo/.anaconda
+RUN sed -i 's/\/home\/zozo\/.anaconda/\/opt\/conda/g' /home/zozo/.bashrc && \
+    chmod +x /home/zozo/zobot_ws/.bin/*.py /home/zozo/zobot_ws/.bin/ros-mgr /home/zozo/zobot_ws/.bin/req /home/zozo/zobot_ws/.bin/install_qt_dependencies.sh || true && \
+    chmod +x /usr/local/bin/show_packages.sh /usr/local/bin/docker_entrypoint.sh
 
+# 5. VCS Import & Build 
 USER $USERNAME
 WORKDIR $ZOBOT_WS
 
-# Import VCS repositories from depend.repos to /opt/ros/ros_ws
 COPY --chown=$USERNAME:$USERNAME .requirements/depend.repos /tmp/depend.repos
-RUN if [ -s /tmp/depend.repos ] && [ "$(grep -c '^\s*[^#]' /tmp/depend.repos)" -gt 1 ]; then \
+RUN if [ -s /tmp/depend.repos ] && [ "$(grep -c '^\s*[^#]' /tmp/depend.repos)" -gt 0 ]; then \
         cd /opt/ros/ros_ws && \
         vcs import . < /tmp/depend.repos; \
     fi
 
-# Build imported repositories if any exist using colcon runner
-RUN if [ -d "/opt/ros/ros_ws" ] && [ "$(find /opt/ros/ros_ws -name "*.xml" -o -name "CMakeLists.txt" -o -name "setup.py" | wc -l)" -gt 0 ]; then \
+# Build imported repos
+RUN if [ -d "/opt/ros/ros_ws" ] && [ "$(find /opt/ros/ros_ws -maxdepth 2 -name "*.xml" -o -name "CMakeLists.txt" -o -name "setup.py" | wc -l)" -gt 0 ]; then \
         echo "🔨 Building imported repositories..." && \
-        . /opt/ros/${ROS_DISTRO}/setup.sh && \
+        /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && \
         colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
             --base-paths /opt/ros/ros_ws \
             --build-base /home/zozo/.ros_builds/build \
-            --install-base /home/zozo/.ros_builds/install; \
-    fi 
-    
-# Source alias.sh in bashrc
-RUN echo 'source /home/zozo/zobot_ws/.bin/alias.sh' >> /home/zozo/.bashrc
+            --install-base /home/zozo/.ros_builds/install"; \
+    fi
 
-# Conda initialization disabled - using system Python 3.12 for ROS2
-# RUN echo 'export PATH="/home/zozo/.anaconda/bin:$PATH"' >> /home/zozo/.bashrc && \
-#     echo 'export CONDA_AUTO_ACTIVATE_BASE=false' >> /home/zozo/.bashrc && \
-#     echo '# Initialize conda' >> /home/zozo/.bashrc && \
-#     echo 'if [ -f "/home/zozo/.anaconda/etc/profile.d/conda.sh" ]; then' >> /home/zozo/.bashrc && \
-#     echo '    . "/home/zozo/.anaconda/etc/profile.d/conda.sh"' >> /home/zozo/.bashrc && \
-#     echo 'fi' >> /home/zozo/.bashrc 
-    
-#################################################################################################################################
+# 6. Install Pixi and UV package managers
+USER root
+
+# Install for root user
+RUN curl -fsSL https://pixi.sh/install.sh | bash && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create all necessary directories for zozo user with proper permissions
+RUN mkdir -p /home/zozo/.pixi/bin \
+             /home/zozo/.cargo/bin \
+             /home/zozo/.local/bin \
+             /home/zozo/.config && \
+    chown -R $USERNAME:$USERNAME /home/zozo/.pixi \
+                                  /home/zozo/.cargo \
+                                  /home/zozo/.local \
+                                  /home/zozo/.config
+
+# Install for zozo user
+USER $USERNAME
+RUN curl -fsSL https://pixi.sh/install.sh | bash && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Set PATH for both users
+USER root
+ENV PATH="/root/.pixi/bin:/root/.cargo/bin:/root/.local/bin:$PATH"
+
+USER $USERNAME
+ENV PATH="/home/zozo/.pixi/bin:/home/zozo/.cargo/bin:/home/zozo/.local/bin:$PATH"
+
+# 7. Final Env vars and setup
+ENV RCUTILS_CONSOLE_OUTPUT_FORMAT="[{severity}]: {message}"
+ENV RCUTILS_COLORIZED_OUTPUT=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV CARB_AUDIO_DISABLE=1
+ENV MAX_JOBS=8
+ENV ROS_DISTRO=${ROS_DISTRO}
+ENV ROS_DOMAIN_ID=1
+ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
+
+# Source bashrc additions
+RUN echo 'source /home/zozo/zobot_ws/.dev/alias.sh' >> /home/zozo/.bashrc && \
+    echo '' >> /home/zozo/.bashrc && \
+    echo '# Show packages on interactive shell start (once per container)' >> /home/zozo/.bashrc && \
+    echo 'if [ -n "$PS1" ] && [ ! -f /tmp/.packages_shown ]; then' >> /home/zozo/.bashrc && \
+    echo '    touch /tmp/.packages_shown' >> /home/zozo/.bashrc && \
+    echo '    /usr/local/bin/show_packages.sh' >> /home/zozo/.bashrc && \
+    echo 'fi' >> /home/zozo/.bashrc
+
+# Final verification stage (to be run during build)
+RUN echo "=== FINAL VERIFICATION ===" && \
+    /usr/local/bin/python3 -c "import torch; import tensorflow; import PySide6; print('AI Frameworks OK')" && \
+    /opt/conda/bin/conda --version && \
+    /usr/local/bin/pkl --version && \
+    pixi --version && \
+    uv --version && \
+    /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && ros2 doctor --report | grep 'RMW MIDDLEWARE'" && \
+    echo "=== ALL SYSTEMS GO ==="
+
+# Override entrypoint to show packages instead of CUDA version
+ENTRYPOINT ["/usr/local/bin/docker_entrypoint.sh"]
+CMD ["/bin/bash"]

@@ -130,11 +130,6 @@ export MAX_JOBS=$(nproc)
 export PATH=/usr/local/cuda/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
-# Source crypto workspace (needed for crypto_prediction msg/srv/action types in ros2 CLI)
-if [ -f "/home/zozo/.crypto_builds/install/setup.bash" ]; then
-    source "/home/zozo/.crypto_builds/install/setup.bash"
-fi
-
 # Conda configuration and initialization (DISABLED - using system Python 3.12 for ROS2)
 export PATH="/home/zozo/.anaconda/bin:$PATH"
 export CONDA_AUTO_ACTIVATE_BASE=false
@@ -147,8 +142,8 @@ elif [ -f "/home/zozo/.anaconda/bin/conda" ]; then
     eval "$(/home/zozo/.anaconda/bin/conda shell.bash hook)"
 fi
 
-# ROS Domain ID (should be set from host environment)
-export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+# ROS Domain ID (fixed to 1 for this container)
+export ROS_DOMAIN_ID=1
 
 # Function to quickly activate conda environments
 activate_conda() {
@@ -191,7 +186,7 @@ if [ -t 1 ]; then
     echo -e "${GREEN}ROS Distribution: ${ROS_DISTRO:-humble}${NC}"
     echo -e "${GREEN}ROS Domain ID: ${ROS_DOMAIN_ID}${NC}"
     echo -e "${YELLOW}Type 'cr h' for colcon commands or 'req help' for requirements management${NC}"
-    echo -e "${CYAN}Quick navigation: rosws, ws, cdmount, cdcave${NC}"
+    echo -e "${CYAN}Quick navigation: roscd, ws, cdmount, cdcave${NC}"
 fi
 
 # Source ROS setup files
@@ -202,11 +197,7 @@ for setup_file in "/opt/ros/${ROS_DISTRO:-humble}/setup.bash" "/home/zozo/.ros_b
 done
 
 # Load custom aliases and functions
-if [ -f "/home/zozo/zobot_ws/.bin/alias.sh" ]; then
-    source "/home/zozo/zobot_ws/.bin/alias.sh"
+if [ -f "/home/zozo/zobot_ws/.dev/alias.sh" ]; then
+    source "/home/zozo/zobot_ws/.dev/alias.sh"
 fi
 
-# LeRobot X Jazzy workspace setup
-# if [ -f "/home/zozo/zobot_ws/ros/lerobot_x_jazzy/setup_workspace.sh" ]; then
-#     source "/home/zozo/zobot_ws/ros/lerobot_x_jazzy/setup_workspace.sh"
-# fi

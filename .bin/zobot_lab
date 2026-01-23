@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# zobot_lab - Advanced container management for robotics development
+# zobot_lab - DevContainer-based container management for robotics development
 
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
@@ -11,279 +11,180 @@ NC='\033[0m'
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Container config
-CONTAINER_NAME="zobot-lab"
-DOCKERFILE_PATH="$WORKSPACE_ROOT/.devcontainer/Dockerfile.ai"
-IMAGE_NAME="zobot-lab"
-
 # Default config
 ROS_DISTRO="jazzy"
 CONDA_ENV=""
-MOUNT_VOLUME=""
 BUILD_ONLY=false
 PRUNE_CONTAINER=false
 
 # Show help
 show_help() {
-    echo -e "${CYAN}🤖 Zobot LAB - Robotics Development Container${NC}"
+    echo -e "${CYAN}🤖 Zobot LAB - DevContainer-Based Robotics Development${NC}"
     echo ""
     echo -e "${GREEN}Usage:${NC}"
     echo "  zobot_lab [OPTIONS]"
     echo ""
     echo -e "${GREEN}Options:${NC}"
-    echo "  --humble              Use ROS Humble (default)"
-    echo "  --jazzy               Use ROS Jazzy"
+    echo "  --jazzy               Use ROS Jazzy (default)"
     echo "  --conda <env_name>    Activate conda environment on start"
-    echo "  --volume <path>       Mount host path to /home/zozo/mount"
-    echo "  --build               Build container only, don't run"
-    echo "  --prune               Stop and remove container"
+    echo "  --build               Build images only, don't run"
+    echo "  --rebuild             Rebuild images from scratch"
+    echo "  --prune               Stop and remove containers and images"
+    echo "  --vscode              Open in VS Code (DevContainer)"
     echo "  --help, -h            Show this help message"
     echo ""
     echo -e "${GREEN}Examples:${NC}"
-    echo "  zobot_lab                           # Start container with ROS Humble"
-    echo "  zobot_lab --jazzy                   # Start container with ROS Jazzy"
-    echo "  zobot_lab --conda robotics          # Start with 'robotics' conda env"
-    echo "  zobot_lab --volume /path/to/volume  # Mount external volume"
-    echo "  zobot_lab --build                   # Build container only"
-    echo "  zobot_lab --prune                   # Remove container"
+    echo "  zobot_lab                    # Start container with ROS Jazzy"
+    echo "  zobot_lab --build            # Build images"
+    echo "  zobot_lab --rebuild          # Rebuild from scratch"
+    echo "  zobot_lab --vscode           # Open in VS Code"
+    echo "  zobot_lab --prune            # Remove containers and images"
+    echo ""
+    echo -e "${CYAN}DevContainer Commands (Alternative):${NC}"
+    echo "  code --folder-uri vscode-remote://dev-container+${WORKSPACE_ROOT}/.devcontainer/jazzy/devcontainer.json"
 }
 
-build_container() {
-    local distro=$1
-    local image_tag="${IMAGE_NAME}-${distro}"
-    
-    echo -e "${YELLOW}Building ${image_tag} container...${NC}"
-    
-    local base_image
-    if [ "$distro" = "jazzy" ]; then
-        base_image="rwthika/ros2-ml:jazzy"
-    else
-        base_image="rwthika/ros2-ml:humble"
+# Check if required tools are installed
+check_requirements() {
+    if ! command -v docker &> /dev/null; then
+        echo -e "${RED}Error: Docker is not installed${NC}"
+        exit 1
     fi
     
-    if docker build \
-        -f "$DOCKERFILE_PATH" \
-        -t "$image_tag" \
-        --build-arg ROS_DISTRO="$distro" \
-        --build-arg BASE_IMAGE="$base_image" \
-        --target overlay-builder \
-        "$WORKSPACE_ROOT"; then
-        echo -e "${GREEN}Container built successfully!${NC}"
-    else
-        echo -e "${RED}Container build failed!${NC}"
+    if ! command -v docker compose &> /dev/null; then
+        echo -e "${RED}Error: Docker Compose is not installed${NC}"
         exit 1
     fi
 }
 
-image_exists() {
-    local image_tag="${IMAGE_NAME}-${1}"
-    docker image inspect "$image_tag" &> /dev/null
+# Setup environment variables for docker-compose
+setup_env() {
+    # Check for conda directory
+    if [ -d "/mnt/cave/.conda_docker" ] && [ "$(ls -A /mnt/cave/.conda_docker 2>/dev/null)" ]; then
+        export CONDA_MOUNT="/mnt/cave/.conda_docker"
+    else
+        # Create empty directory for mount
+        mkdir -p /tmp/empty 2>/dev/null || true
+        export CONDA_MOUNT="/tmp/empty"
+    fi
+    
+    # Ensure DISPLAY is set
+    export DISPLAY="${DISPLAY:-:0}"
+    
+    # Set ROS_DOMAIN_ID to 1 (fixed for this container)
+    export ROS_DOMAIN_ID=1
 }
 
-container_running() {
-    local container_name="${CONTAINER_NAME}-${1}"
-    docker ps --format '{{.Names}}' | grep -q "^${container_name}$"
+# Build images
+build_images() {
+    local distro=$1
+    local rebuild=${2:-false}
+    
+    echo -e "${YELLOW}Building images for ${distro}...${NC}"
+    
+    setup_env
+    
+    cd "$WORKSPACE_ROOT" || exit 1
+    
+    local build_args=""
+    if [ "$rebuild" = true ]; then
+        build_args="--no-cache --pull"
+    fi
+    
+    # Build base image first
+    if docker compose --profile build build ${build_args} base-ai; then
+        echo -e "${GREEN}Base image built successfully${NC}"
+    else
+        echo -e "${RED}Base image build failed${NC}"
+        return 1
+    fi
+    
+    # Build overlay image
+    if docker compose --profile "$distro" build ${build_args} "zobot-${distro}"; then
+        echo -e "${GREEN}${distro} image built successfully${NC}"
+    else
+        echo -e "${RED}${distro} image build failed${NC}"
+        return 1
+    fi
 }
 
-container_exists() {
-    local container_name="${CONTAINER_NAME}-${1}"
-    docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"
-}
-
+# Start container
 start_container() {
     local distro=$1
     local conda_env=$2
-    local mount_vol=$3
     
-    local image_tag="${IMAGE_NAME}-${distro}"
-    local container_name="${CONTAINER_NAME}-${distro}"
+    echo -e "${GREEN}Starting ${distro} container...${NC}"
     
-    if ! image_exists "$distro"; then
-        echo -e "${YELLOW}Image not found. Building...${NC}"
-        build_container "$distro"
-    fi
+    setup_env
     
-    local mount_args=""
-    if [ -n "$mount_vol" ]; then
-        if [ ! -d "$mount_vol" ]; then
-            echo -e "${RED}Mount path does not exist: $mount_vol${NC}"
-            exit 1
-        fi
-        mount_args="-v $mount_vol:/home/zozo/zobot_ws/mount"
-    fi
-
-    # Check if conda host directory exists and is not empty
-    local conda_host_dir="/mnt/cave/.conda_docker"
-    local conda_mount_args=""
-    if [ -d "$conda_host_dir" ] && [ "$(ls -A "$conda_host_dir" 2>/dev/null)" ]; then
-        echo -e "${GREEN}Found existing conda directory, mounting...${NC}"
-        conda_mount_args="--volume $conda_host_dir:/home/zozo/.anaconda:rw"
-    else
-        echo -e "${YELLOW}Conda directory empty or missing, using container's conda installation${NC}"
-    fi
+    cd "$WORKSPACE_ROOT" || exit 1
     
-    local ros_domain_id=${ROS_DOMAIN_ID:-0}
-
-    # Check if .netrc file exists and add mount for wandb login api key (Else every time we need to login after prune)
-    local netrc_mount_args=""
-    if [ -f "$HOME/.netrc" ]; then
-        netrc_mount_args="--volume $HOME/.netrc:/home/zozo/.netrc:rw"
-        echo -e "${GREEN}Found .netrc file, mounting...${NC}"
-    else
-        echo -e "${YELLOW}No .netrc file found, skipping wandb login api key mount${NC}"
-    fi
-
-    # Check if huggingface cli login api key is mounted (Else every time we need to login after prune)
-    local huggingface_mount_args=""
-    if [ -f "$HOME/.cache/huggingface/stored_tokens" ]; then
-        huggingface_mount_args="--volume $HOME/.cache/huggingface:/home/zozo/.cache/huggingface:rw"
-        echo -e "${GREEN}Found .huggingface file, mounting...${NC}"
-    else
-        echo -e "${YELLOW}Huggingface cache directory missing, skipping mounting api keys${NC}"
-    fi
-    # Create XDG_RUNTIME_DIR on host
-    local xdg_runtime_dir
-    xdg_runtime_dir="/tmp/runtime-$(id -u)"
-    mkdir -p "$xdg_runtime_dir"
-    chmod 700 "$xdg_runtime_dir"
-    
-    if container_running "$distro"; then
-        echo -e "${GREEN}Entering running container...${NC}"
-        if [ -n "$conda_env" ]; then
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
-        else
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && grep -q 'zobot-$ROS_DISTRO' /etc/hosts 2>/dev/null || echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts >/dev/null; exec bash"
-        fi
-    elif container_exists "$distro"; then
-        echo -e "${YELLOW}Starting existing container...${NC}"
-        docker rm "$container_name" &> /dev/null
-        echo -e "${GREEN}Creating new persistent container...${NC}"
-        docker run -d \
-            --name "$container_name" \
-            --hostname "zobot-${distro}" \
-            --network host \
-            --gpus all \
-            --runtime nvidia \
-            --privileged \
-            --env DISPLAY="$DISPLAY" \
-            --env ROS_DOMAIN_ID="$ros_domain_id" \
-            --env NVIDIA_VISIBLE_DEVICES=all \
-            --env NVIDIA_DRIVER_CAPABILITIES=all \
-            --env QT_X11_NO_MITSHM=1 \
-            --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
-            --volume "$xdg_runtime_dir:/tmp/runtime-zozo:rw" \
-            --volume "$HOME/.ssh:/home/zozo/.ssh:ro" \
-            --volume "/mnt/cave:/home/zozo/cave:rw" \
-            --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
-            --volume "/home/zozo/workspaces/money_ws:/home/zozo/crypto_ws:rw" \
-            --volume /dev:/dev:rw \
-            --volume /run/udev:/run/udev:ro \
-            --volume /etc/group:/etc/group:ro \
-            --volume /etc/passwd:/etc/passwd:ro \
-            --volume /home/zozo/.cache/huggingface:/home/zozo/.cache/huggingface:rw \
-            ${conda_mount_args:+$conda_mount_args} \
-            ${netrc_mount_args:+$netrc_mount_args} \
-            ${huggingface_mount_args:+$huggingface_mount_args} \
-            --device /dev/dri:/dev/dri \
-            ${mount_args:+$mount_args} \
-            "$image_tag" \
-            tail -f /dev/null
+    # Start container in background
+    if docker compose --profile "$distro" up -d "zobot-${distro}"; then
+        echo -e "${GREEN}Container started${NC}"
         
-        echo -e "${GREEN}Container started in background. Entering container...${NC}"
-        sleep 2  
+        # Wait for container to be ready
+        sleep 2
+        
+        # Enter container
         if [ -n "$conda_env" ]; then
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
+            echo -e "${CYAN}Activating conda environment: ${conda_env}${NC}"
+            docker compose --profile "$distro" exec "zobot-${distro}" bash -c \
+                "source /opt/conda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
         else
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && grep -q 'zobot-$ROS_DISTRO' /etc/hosts 2>/dev/null || echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts >/dev/null; exec bash"
+            docker compose --profile "$distro" exec "zobot-${distro}" bash
         fi
     else
-        echo -e "${GREEN}Starting new container...${NC}"
-        docker run -d \
-            --name "$container_name" \
-            --hostname "zobot-${distro}" \
-            --network host \
-            --gpus all \
-            --runtime nvidia \
-            --privileged \
-            --env DISPLAY="$DISPLAY" \
-            --volume "$xdg_runtime_dir:/tmp/runtime-zozo:rw" \
-            --env ROS_DOMAIN_ID="$ros_domain_id" \
-            --env NVIDIA_VISIBLE_DEVICES=all \
-            --env NVIDIA_DRIVER_CAPABILITIES=all \
-            --env QT_X11_NO_MITSHM=1 \
-            --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
-            --volume "$HOME/.ssh:/home/zozo/.ssh:ro" \
-            --volume "/mnt/cave:/home/zozo/cave:rw" \
-            --volume "$WORKSPACE_ROOT:/home/zozo/zobot_ws:rw" \
-            --volume "/home/zozo/workspaces/money_ws:/home/zozo/crypto_ws:rw" \
-            --volume /dev:/dev:rw \
-            --volume /run/udev:/run/udev:ro \
-            --volume /etc/group:/etc/group:ro \
-            --volume /etc/passwd:/etc/passwd:ro \
-            ${conda_mount_args:+$conda_mount_args} \
-            ${netrc_mount_args:+$netrc_mount_args} \
-            ${huggingface_mount_args:+$huggingface_mount_args} \
-            --device /dev/dri:/dev/dri \
-            ${mount_args:+$mount_args} \
-            "$image_tag" \
-            tail -f /dev/null
-        
-        echo -e "${GREEN}Container started in background. Entering container...${NC}"
-        sleep 2  
-        if [ -n "$conda_env" ]; then
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && source /home/zozo/.anaconda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
-        else
-            docker exec -it "$container_name" bash -c "source ~/.bashrc && grep -q 'zobot-$ROS_DISTRO' /etc/hosts 2>/dev/null || echo '127.0.0.1 zobot-$ROS_DISTRO' | sudo tee -a /etc/hosts >/dev/null; exec bash"
-        fi
+        echo -e "${RED}Failed to start container${NC}"
+        return 1
     fi
 }
 
-prune_container() {
+# Prune containers and images
+prune_containers() {
     local distro=$1
-    local container_name="${CONTAINER_NAME}-${distro}"
-    local image_tag="${IMAGE_NAME}-${distro}"
-    local conda_host_dir="/mnt/cave/.conda_docker"
     
-    echo -e "${RED}Pruning container for $distro...${NC}"
+    echo -e "${RED}Pruning ${distro} container and images...${NC}"
     
-    if container_exists "$distro"; then
-        # Create directory if it doesn't exist
-        mkdir -p "$conda_host_dir" || {
-            echo -e "${YELLOW}Warning: Could not create conda backup directory${NC}"
-        }
-        
-        # Check if .anaconda exists in container before copying
-        if docker exec "$container_name" test -d /home/zozo/.anaconda 2>/dev/null; then
-            echo -e "${CYAN}Backing up conda environment...${NC}"
-            if docker cp "$container_name:/home/zozo/.anaconda/." "$conda_host_dir/" 2>/dev/null; then
-                echo -e "${GREEN}Conda environment backed up successfully${NC}"
-            else
-                echo -e "${YELLOW}Warning: Failed to backup conda environment${NC}"
-            fi
-        else
-            echo -e "${YELLOW}No conda environment found in container${NC}"
-        fi
-        
-        docker stop "$container_name" &> /dev/null
-        docker rm "$container_name" &> /dev/null
-        echo -e "${GREEN}Container removed${NC}"
+    cd "$WORKSPACE_ROOT" || exit 1
+    
+    # Stop and remove containers
+    docker compose --profile "$distro" down
+    
+    # Remove images
+    docker rmi "ai_new_image:${distro}" 2>/dev/null || true
+    
+    # If pruning specific distro, ask about base image
+    read -p "Remove base image? (y/N) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        docker rmi base_ai_image:latest 2>/dev/null || true
     fi
     
-    # Remove image
-    if image_exists "$distro"; then
-        docker rmi "$image_tag" &> /dev/null
-        echo -e "${GREEN}Image removed${NC}"
-    fi
-    
-    echo -e "${GREEN}Pruning complete for $distro${NC}"
+    echo -e "${GREEN}Pruning complete${NC}"
 }
 
+# Open in VS Code
+open_vscode() {
+    local distro=$1
+    
+    echo -e "${CYAN}Opening in VS Code (${distro})...${NC}"
+    
+    cd "$WORKSPACE_ROOT" || exit 1
+    
+    # Open with specific devcontainer config
+    if command -v code &> /dev/null; then
+        # Use devcontainer CLI or VS Code command palette
+        code --folder-uri "vscode-remote://dev-container+$(echo -n "${WORKSPACE_ROOT}/.devcontainer/${distro}/devcontainer.json" | xxd -plain | tr -d '\n' | sed 's/\(..\)/%\1/g')"
+    else
+        echo -e "${YELLOW}VS Code not found. Install VS Code or use regular mode.${NC}"
+        echo -e "${CYAN}Install: https://code.visualstudio.com/${NC}"
+    fi
+}
+
+# Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --humble)
-            ROS_DISTRO="humble"
-            shift
-            ;;
         --jazzy)
             ROS_DISTRO="jazzy"
             shift
@@ -292,16 +193,21 @@ while [[ $# -gt 0 ]]; do
             CONDA_ENV="$2"
             shift 2
             ;;
-        --volume)
-            MOUNT_VOLUME="$2"
-            shift 2
-            ;;
         --build)
             BUILD_ONLY=true
             shift
             ;;
+        --rebuild)
+            BUILD_ONLY=true
+            REBUILD=true
+            shift
+            ;;
         --prune)
             PRUNE_CONTAINER=true
+            shift
+            ;;
+        --vscode)
+            VSCODE=true
             shift
             ;;
         --help|-h)
@@ -316,10 +222,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Main execution
+check_requirements
+
 if [ "$PRUNE_CONTAINER" = true ]; then
-    prune_container "$ROS_DISTRO"
+    prune_containers "$ROS_DISTRO"
 elif [ "$BUILD_ONLY" = true ]; then
-    build_container "$ROS_DISTRO"
+    build_images "$ROS_DISTRO" "${REBUILD:-false}"
+elif [ "$VSCODE" = true ]; then
+    open_vscode "$ROS_DISTRO"
 else
-    start_container "$ROS_DISTRO" "$CONDA_ENV" "$MOUNT_VOLUME"
+    start_container "$ROS_DISTRO" "$CONDA_ENV"
 fi

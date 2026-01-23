@@ -1,0 +1,89 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Important: DO NOT ignore .dev/ - it contains required scripts
+# !.dev/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.dmypy.json
+dmyp.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ROS build artifacts
+build/
+install/
+log/
+*.bag
+*.db3
+.ros_builds/
+
+# Output directories
+ros/lerobot_x_jazzy/lerobot_x_jazzy/outputs/
+ros/lerobot_x_jazzy/lerobot_x_jazzy/wandb/
+
+# Conda/Virtual Environments
+.conda/
+.venv/
+venv/
+ENV/
+env/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+.cache/
+tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node modules (if any)
+node_modules/
+
+# Test files
+tests/
+test/
+*.test.py
+*_test.py
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Pixi/UV cache
+.pixi/
+.cargo/

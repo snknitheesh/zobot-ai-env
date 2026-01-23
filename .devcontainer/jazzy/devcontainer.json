@@ -1,0 +1,69 @@
+{
+    "name": "ROS2 Jazzy Development",
+    "remoteUser": "zozo",
+    
+    // Use docker-compose for service definition
+    "dockerComposeFile": "../../docker-compose.yml",
+    "service": "ros2-jazzy",
+    "workspaceFolder": "/home/zozo/zobot_ws",
+    
+    // Build base image before starting (ensures robotics-dev-base exists)
+    "initializeCommand": "bash ${localWorkspaceFolder}/.dev/build_base.sh",
+    
+    // Run docker-compose with jazzy profile
+    "runServices": ["ros2-jazzy"],
+    "overrideCommand": true,
+    
+    // DevContainer features
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+        "ghcr.io/devcontainers/features/common-utils:latest": {
+            "installZsh": false,
+            "username": "zozo",
+            "uid": "1000",
+            "gid": "1000"
+        }
+    },
+    
+    // VS Code customization
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "charliermarsh.ruff",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-iot.vscode-ros",
+                "smilerobotics.urdf",
+                "redhat.vscode-xml",
+                "tamasfe.even-better-toml",
+                "timonwong.shellcheck",
+                "yzhang.markdown-all-in-one",
+                "nvidia.nsight-vscode-edition"
+            ],
+            "settings": {
+                "files.associations": {
+                    "*.rviz": "yaml",
+                    "*.srdf": "xml",
+                    "*.urdf": "xml",
+                    "*.xacro": "xml"
+                },
+                "python.defaultInterpreterPath": "/usr/local/bin/python3",
+                "python.analysis.extraPaths": [
+                    "/opt/ros/jazzy/lib/python3.12/site-packages",
+                    "/usr/local/lib/python3.12/site-packages"
+                ],
+                "terminal.integrated.shell.linux": "/bin/bash",
+                "terminal.integrated.env.linux": {
+                    "ROS_DISTRO": "jazzy"
+                }
+            }
+        }
+    },
+    
+    // Post-start commands
+    "postStartCommand": "bash -c 'source /opt/ros/jazzy/setup.bash && echo \"🤖 ROS2 Jazzy Development Container Ready\"'",
+    
+    // Forward ports (if needed)
+    "forwardPorts": []
+}
