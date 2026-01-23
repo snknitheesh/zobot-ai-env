@@ -181,16 +181,11 @@ prune_containers() {
         docker rmi "robotics-dev:${distro}" 2>/dev/null || true
     fi
     
-    # If pruning specific distro, ask about base image
-    read -p "Remove base image? (y/N) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if docker image inspect "robotics-dev-base:latest" &> /dev/null; then
-            docker rmi robotics-dev-base:latest 2>/dev/null || true
-        fi
-    fi
+    # Keep base image by default (it's large and takes long to rebuild)
+    # To remove base image manually: docker rmi robotics-dev-base:latest
     
     echo -e "${GREEN}Pruning complete${NC}"
+    echo -e "${CYAN}Note: Base image kept (use 'docker rmi robotics-dev-base:latest' to remove manually)${NC}"
 }
 
 # Open in VS Code
