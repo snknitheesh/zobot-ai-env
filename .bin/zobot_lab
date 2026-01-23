@@ -122,21 +122,17 @@ start_container() {
     
     cd "$WORKSPACE_ROOT" || exit 1
     
-    # Check if images exist
+    # Check if images exist (but don't auto-build)
     if ! docker image inspect "robotics-dev-base:latest" &> /dev/null; then
-        echo -e "${YELLOW}Base image not found. Building images first...${NC}"
-        if ! build_images "$distro" false; then
-            echo -e "${RED}Failed to build images${NC}"
-            return 1
-        fi
+        echo -e "${RED}Error: Base image not found!${NC}"
+        echo -e "${YELLOW}Please build images first: zobot_lab --build${NC}"
+        return 1
     fi
     
     if ! docker image inspect "robotics-dev:${distro}" &> /dev/null; then
-        echo -e "${YELLOW}${distro} image not found. Building images first...${NC}"
-        if ! build_images "$distro" false; then
-            echo -e "${RED}Failed to build images${NC}"
-            return 1
-        fi
+        echo -e "${RED}Error: ${distro} image not found!${NC}"
+        echo -e "${YELLOW}Please build images first: zobot_lab --build${NC}"
+        return 1
     fi
     
     # Start container in background
