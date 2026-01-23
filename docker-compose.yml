@@ -76,8 +76,8 @@ services:
       - /etc/group:/etc/group:ro
       - /etc/passwd:/etc/passwd:ro
       
-      # Cave storage for conda backup/restore (mounted for access)
-      - /mnt/cave/.conda_docker:/mnt/cave/.conda_docker:rw
+      # Conda environments (persistent - directly mounted to host)
+      - /mnt/cave/.conda_docker:/home/zozo/.conda:rw
       
       # Wandb API key (if exists)
       - ${HOME}/.netrc:/home/zozo/.netrc:rw

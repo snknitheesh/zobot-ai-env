@@ -146,20 +146,6 @@ start_container() {
         # Wait for container to be ready
         sleep 2
         
-        # Restore conda environments if backup exists
-        if [ -d "/mnt/cave/.conda_docker" ] && [ "$(ls -A /mnt/cave/.conda_docker 2>/dev/null)" ]; then
-            echo -e "${CYAN}Restoring conda environments...${NC}"
-            docker compose --profile "$distro" exec "ros2-${distro}" bash -c \
-                "cp -r /mnt/cave/.conda_docker/. /home/zozo/.conda/ 2>/dev/null || true"
-            
-            if [ -d "/mnt/cave/.conda_docker/envs" ]; then
-                local env_count=$(find /mnt/cave/.conda_docker/envs -maxdepth 1 -type d 2>/dev/null | wc -l)
-                if [ "$env_count" -gt 1 ]; then
-                    echo -e "${GREEN}Restored $((env_count - 1)) conda environment(s)${NC}"
-                fi
-            fi
-        fi
-        
         # Enter container
         if [ -n "$conda_env" ]; then
             echo -e "${CYAN}Activating conda environment: ${conda_env}${NC}"
@@ -182,29 +168,11 @@ prune_containers() {
     
     cd "$WORKSPACE_ROOT" || exit 1
     
-    # Backup conda environments before pruning
-    local container_name="ros2-${distro}-dev"
-    if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
-        echo -e "${CYAN}Backing up conda environments...${NC}"
-        
-        # Create backup directory
-        mkdir -p /mnt/cave/.conda_docker
-        
-        # Copy conda directory from container to host
-        docker cp "${container_name}:/home/zozo/.conda/." /mnt/cave/.conda_docker/ 2>/dev/null || true
-        
-        if [ -d "/mnt/cave/.conda_docker/envs" ]; then
-            local env_count=$(find /mnt/cave/.conda_docker/envs -maxdepth 1 -type d | wc -l)
-            if [ "$env_count" -gt 1 ]; then
-                echo -e "${GREEN}Backed up $((env_count - 1)) conda environment(s)${NC}"
-            fi
-        fi
-    fi
-    
     # Stop and remove containers using docker compose
     docker compose --profile "$distro" down --remove-orphans
     
     # Also manually stop and remove any orphaned containers with the expected name
+    local container_name="ros2-${distro}-dev"
     if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
         echo -e "${YELLOW}Removing orphaned container: ${container_name}${NC}"
         docker stop "$container_name" 2>/dev/null || true
@@ -221,6 +189,7 @@ prune_containers() {
     
     echo -e "${GREEN}Pruning complete${NC}"
     echo -e "${CYAN}Note: Base image kept (use 'docker rmi robotics-dev-base:latest' to remove manually)${NC}"
+    echo -e "${CYAN}Conda environments are preserved at /mnt/cave/.conda_docker${NC}"
 }
 
 # Open in VS Code
