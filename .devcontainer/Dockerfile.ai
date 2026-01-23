@@ -57,6 +57,8 @@ RUN mkdir -p $ZOBOT_WS && \
     mkdir -p /home/zozo/.ros_builds && \
     mkdir -p /home/zozo/mount && \
     mkdir -p /home/zozo/cave && \
+    mkdir -p /home/zozo/.cache/conda-anaconda-tos && \
+    mkdir -p /home/zozo/.conda && \
     mkdir -p /opt/ros/ros_ws && \
     chown -R $USERNAME:$USERNAME /home/zozo && \
     chown -R $USERNAME:$USERNAME /opt/ros/ros_ws && \
