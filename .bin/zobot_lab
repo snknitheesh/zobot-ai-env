@@ -92,7 +92,7 @@ build_images() {
     fi
     
     # Build base image first
-    if docker compose --profile build build ${build_args} base-ai; then
+    if docker compose --profile build build ${build_args} base-dev; then
         echo -e "${GREEN}Base image built successfully${NC}"
     else
         echo -e "${RED}Base image build failed${NC}"
@@ -100,7 +100,7 @@ build_images() {
     fi
     
     # Build overlay image
-    if docker compose --profile "$distro" build ${build_args} "zobot-${distro}"; then
+    if docker compose --profile "$distro" build ${build_args} "ros2-${distro}"; then
         echo -e "${GREEN}${distro} image built successfully${NC}"
     else
         echo -e "${RED}${distro} image build failed${NC}"
@@ -120,7 +120,7 @@ start_container() {
     cd "$WORKSPACE_ROOT" || exit 1
     
     # Start container in background
-    if docker compose --profile "$distro" up -d "zobot-${distro}"; then
+    if docker compose --profile "$distro" up -d "ros2-${distro}"; then
         echo -e "${GREEN}Container started${NC}"
         
         # Wait for container to be ready
@@ -129,10 +129,10 @@ start_container() {
         # Enter container
         if [ -n "$conda_env" ]; then
             echo -e "${CYAN}Activating conda environment: ${conda_env}${NC}"
-            docker compose --profile "$distro" exec "zobot-${distro}" bash -c \
+            docker compose --profile "$distro" exec "ros2-${distro}" bash -c \
                 "source /opt/conda/etc/profile.d/conda.sh && conda activate $conda_env && exec bash"
         else
-            docker compose --profile "$distro" exec "zobot-${distro}" bash
+            docker compose --profile "$distro" exec "ros2-${distro}" bash
         fi
     else
         echo -e "${RED}Failed to start container${NC}"
@@ -152,13 +152,13 @@ prune_containers() {
     docker compose --profile "$distro" down
     
     # Remove images
-    docker rmi "ai_new_image:${distro}" 2>/dev/null || true
+    docker rmi "robotics-dev:${distro}" 2>/dev/null || true
     
     # If pruning specific distro, ask about base image
     read -p "Remove base image? (y/N) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        docker rmi base_ai_image:latest 2>/dev/null || true
+        docker rmi robotics-dev-base:latest 2>/dev/null || true
     fi
     
     echo -e "${GREEN}Pruning complete${NC}"
