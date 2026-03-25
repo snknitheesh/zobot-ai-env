@@ -89,7 +89,6 @@ alias gco='git checkout'
 alias cdros='cd /home/zozo/zobot_ws/ros'
 alias cdws='cd /home/zozo/zobot_ws'
 alias cdmount='cd /home/zozo/mount'
-alias cdcave='cd /home/zozo/cave'
 
 # Alert for long running commands
 alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
@@ -130,17 +129,7 @@ export MAX_JOBS=$(nproc)
 export PATH=/usr/local/cuda/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
-# Conda configuration and initialization (DISABLED - using system Python 3.12 for ROS2)
-export PATH="/home/zozo/.anaconda/bin:$PATH"
-export CONDA_AUTO_ACTIVATE_BASE=false
-
-# Initialize conda for bash (DISABLED - using system Python 3.12 for ROS2)
-if [ -f "/home/zozo/.anaconda/etc/profile.d/conda.sh" ]; then
-    . "/home/zozo/.anaconda/etc/profile.d/conda.sh"
-elif [ -f "/home/zozo/.anaconda/bin/conda" ]; then
-    # Fallback initialization if conda.sh doesn't exist
-    eval "$(/home/zozo/.anaconda/bin/conda shell.bash hook)"
-fi
+# Conda (initialized by 'conda init bash' during image build)
 
 # ROS Domain ID (fixed to 1 for this container)
 export ROS_DOMAIN_ID=1
@@ -186,7 +175,7 @@ if [ -t 1 ]; then
     echo -e "${GREEN}ROS Distribution: ${ROS_DISTRO:-humble}${NC}"
     echo -e "${GREEN}ROS Domain ID: ${ROS_DOMAIN_ID}${NC}"
     echo -e "${YELLOW}Type 'cr h' for colcon commands or 'req help' for requirements management${NC}"
-    echo -e "${CYAN}Quick navigation: roscd, ws, cdmount, cdcave${NC}"
+    echo -e "${CYAN}Quick navigation: roscd, ws, cdmount${NC}"
 fi
 
 # Source ROS setup files

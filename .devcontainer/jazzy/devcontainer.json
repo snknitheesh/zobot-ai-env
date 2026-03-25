@@ -7,7 +7,7 @@
     "service": "ros2-jazzy",
     "workspaceFolder": "/home/zozo/zobot_ws",
     
-    // Build base image before starting (ensures robotics-dev-base exists)
+    // Build base image before starting (ensures zobot-lab-jazzy-base exists)
     "initializeCommand": "bash ${localWorkspaceFolder}/.dev/build_base.sh",
     
     // Run docker-compose with jazzy profile

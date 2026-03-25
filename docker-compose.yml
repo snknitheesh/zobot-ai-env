@@ -4,8 +4,11 @@ services:
     build:
       context: .
       dockerfile: .devcontainer/Dockerfile.base
-      # Note: cache_from removed to avoid error when image doesn't exist yet
-    image: robotics-dev-base:latest
+      args:
+        BUILDKIT_INLINE_CACHE: "1"
+      cache_from:
+        - ghcr.io/snknitheesh/zobot-lab-jazzy-base:latest
+    image: zobot-lab-jazzy-base:latest
     profiles: ["build"]
 
   # ROS2 Jazzy development service
@@ -14,10 +17,12 @@ services:
       context: .
       dockerfile: .devcontainer/Dockerfile.ai
       args:
-        - ROS_DISTRO=jazzy
+        BUILDKIT_INLINE_CACHE: "1"
+        ROS_DISTRO: jazzy
       cache_from:
-        - robotics-dev-base:latest
-    image: robotics-dev:jazzy
+        - ghcr.io/snknitheesh/zobot-lab-jazzy-base:latest
+        - zobot-lab-jazzy:latest
+    image: zobot-lab-jazzy:latest
     container_name: ros2-jazzy-dev
     hostname: ros2-jazzy
     
@@ -56,9 +61,6 @@ services:
       # Workspace
       - .:/home/zozo/zobot_ws:rw
       
-      # Cave storage
-      - /mnt/cave:/home/zozo/cave:rw
-      
       # SSH keys (read-only)
       - ${HOME}/.ssh:/home/zozo/.ssh:ro
       
@@ -77,7 +79,7 @@ services:
       - /etc/passwd:/etc/passwd:ro
       
       # Conda environments (persistent - directly mounted to host)
-      - /mnt/cave/.conda_docker:/home/zozo/.conda:rw
+      - /lake/.conda_docker:/home/zozo/.conda:rw
       
       # Wandb API key (if exists)
       - ${HOME}/.netrc:/home/zozo/.netrc:rw

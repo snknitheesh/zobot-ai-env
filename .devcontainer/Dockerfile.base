@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM nvcr.io/nvidia/cuda:13.0.2-devel-ubuntu24.04
+FROM nvcr.io/nvidia/cuda:13.2.0-devel-ubuntu24.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -9,7 +9,7 @@ ENV CCACHE_MAXSIZE=10G
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install build dependencies with apt cache mount
+# Install build dependencies and system packages
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y \
@@ -43,12 +43,58 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libnvinfer-dev \
     libnvinfer-plugin-dev \
     vim-common \
+    # Runtime/dev dependencies
+    python3-venv python3-setuptools python3-dev \
+    pciutils \
+    uhubctl \
+    zstd \
+    file \
+    libnuma-dev \
+    libgles2-mesa-dev \
+    libelf-dev \
+    # Open3D shared library deps
+    libxcb-shm0 libglu1-mesa-dev \
+    libc++-dev libc++abi-dev libsdl2-dev libxi-dev libtbb-dev \
+    libomp5 \
+    # GUI / X11 libraries
+    libxcb-cursor0 libxcb-cursor-dev libxcb-xinerama0 libxcb-xinerama0-dev \
+    libxcb-xfixes0 libxcb-xfixes0-dev libxcb-render0 libxcb-render-util0 \
+    libxcb-shape0 libxcb-shape0-dev libxcb-keysyms1 libxcb-keysyms1-dev \
+    libxcb-image0 libxcb-image0-dev libxcb-icccm4 libxcb-icccm4-dev \
+    libxcb-sync1 libxcb-sync-dev libxcb-xkb1 libxcb-xkb-dev \
+    libxkbcommon-x11-0 libxkbcommon-x11-dev libxkbcommon0 libxkbcommon-dev \
+    speech-dispatcher \
+    # General tools
+    sudo openssh-client htop tree unzip rsync \
+    software-properties-common ca-certificates gnupg lsb-release \
+    vim nano pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-    
+# NVIDIA VPI 4 repository (x86_64)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    curl -fsSL https://repo.download.nvidia.com/jetson/jetson-ota-public.asc \
+        | gpg --dearmor -o /usr/share/keyrings/nvidia-jetson-ota.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/nvidia-jetson-ota.gpg] https://repo.download.nvidia.com/jetson/x86_64/noble r38.4 main" \
+        > /etc/apt/sources.list.d/nvidia-vpi.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+        libnvvpi4 vpi4-dev python3.12-vpi4 \
+    && rm -rf /var/lib/apt/lists/*
+
+# NVIDIA Isaac ROS repository
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    curl -fsSL https://isaac.download.nvidia.com/isaac-ros/repos.key \
+        | gpg --dearmor -o /usr/share/keyrings/nvidia-isaac-ros.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/nvidia-isaac-ros.gpg] https://isaac.download.nvidia.com/isaac-ros/release-4.3 noble main" \
+        > /etc/apt/sources.list.d/nvidia-isaac-ros.list && \
+    apt-get update \
+    && rm -rf /var/lib/apt/lists/*
+
 # Download and compile Python 3.12.12
 WORKDIR /tmp
-RUN wget https://www.python.org/ftp/python/3.12.12/Python-3.12.12.tgz \
+RUN --mount=type=cache,target=/root/.cache/ccache \
+    wget https://www.python.org/ftp/python/3.12.12/Python-3.12.12.tgz \
     && tar -xf Python-3.12.12.tgz \
     && cd Python-3.12.12 \
     && ./configure --enable-optimizations \
@@ -57,47 +103,47 @@ RUN wget https://www.python.org/ftp/python/3.12.12/Python-3.12.12.tgz \
     && cd .. \
     && rm -rf Python-3.12.12 Python-3.12.12.tgz
 
-# Update symlinks
-RUN ln -sf /usr/local/bin/python3.12 /usr/bin/python3 && \
-    ln -sf /usr/local/bin/python3.12 /usr/bin/python && \
-    ln -sf /usr/local/bin/pip3.12 /usr/bin/pip3 && \
-    ln -sf /usr/local/bin/pip3.12 /usr/bin/pip
+# Update symlinks (keep /usr/bin/python3 as system python for apt tools)
+RUN ln -sf /usr/local/bin/python3.12 /usr/local/bin/python && \
+    ln -sf /usr/local/bin/pip3.12 /usr/local/bin/pip
 
 # PEP 668: Mark this environment as externally managed
-# This prevents pip from installing packages into the system environment
-# Users must use a virtual environment or conda.
 RUN mkdir -p /usr/local/lib/python3.12/site-packages
 RUN echo "[externally-managed]\nError=This system-wide Python installation is managed by the base Docker image. Please use a virtual environment or conda for your own packages." > /usr/local/lib/python3.12/EXTERNALLY-MANAGED
 
 # Allow breaking system packages during build
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
-# Install python build dependencies for PyTorch (pip cache mount)
+# Install python build dependencies
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install --no-cache-dir numpy pyyaml typing_extensions setuptools wheel
+    pip3 install --no-cache-dir numpy pyyaml typing_extensions setuptools wheel uv
 
-# Clone and build PyTorch with ccache
-WORKDIR /tmp
-RUN git clone --recursive https://github.com/pytorch/pytorch.git
-WORKDIR /tmp/pytorch
-ENV TORCH_CUDA_ARCH_LIST="12.0"
-ENV CMAKE_PREFIX_PATH="/usr/local"
-# Mount ccache directory
-RUN --mount=type=cache,target=/root/.cache/ccache \
-    --mount=type=cache,target=/root/.cache/pip \
-    pip3 install . --no-build-isolation
+# PyTorch + Torchvision + TensorRT from cu130 wheels (compatible with CUDA 13.2)
+ARG TORCH_VERSION=2.11.0
+ARG TORCHVISION_VERSION=0.26.0
+ARG TENSORRT_VERSION=10.16.0.72
+ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu130
 
-# Clone and build Torchvision with ccache
-WORKDIR /tmp
-RUN git clone https://github.com/pytorch/vision.git
-WORKDIR /tmp/vision
-RUN --mount=type=cache,target=/root/.cache/ccache \
+RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cache/pip \
-    pip3 install . --no-build-isolation
+    UV_INDEX_URL=https://pypi.org/simple \
+    UV_EXTRA_INDEX_URL=${PYTORCH_INDEX_URL} \
+    UV_CACHE_DIR=/root/.cache/uv \
+    uv pip install --system --break-system-packages \
+        "torch~=${TORCH_VERSION}" "torchvision~=${TORCHVISION_VERSION}" \
+        "tensorrt~=${TENSORRT_VERSION}" && \
+    pip uninstall -y \
+        nvidia-cublas nvidia-cuda-cupti nvidia-cuda-nvrtc nvidia-cuda-runtime \
+        nvidia-cufft nvidia-cufile nvidia-curand nvidia-cusolver nvidia-cusparse \
+        nvidia-nvjitlink nvidia-nvtx triton 2>/dev/null || true
 
 # TensorFlow install
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --no-cache-dir tensorflow
+
+# PySide6
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --no-cache-dir PySide6
 
 # Install ROS 2 Jazzy
 ENV ROS_DISTRO=jazzy
@@ -112,7 +158,6 @@ ENV ROS_VERSION=2
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    software-properties-common \
     locales \
     && locale-gen en_US en_US.UTF-8 \
     && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
@@ -120,13 +165,13 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gnupg2 \
-    lsb-release \
     && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null \
     && apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-ros-base \
     ros-dev-tools \
     ros-jazzy-ament-cmake-vendor-package \
+    python3-vcstool python3-colcon-common-extensions python3-rosdep \
     cargo \
     rustc \
     nlohmann-json3-dev \
@@ -150,6 +195,19 @@ RUN --mount=type=cache,target=/root/.cache/ccache \
 # Set RMW Implementation to Zenoh
 ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
 
+# Gazebo Harmonic
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" \
+        | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null && \
+    apt-get update && apt-get install -y --no-install-recommends gz-harmonic && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install PKL (Configuration Language)
+RUN curl -L -o /usr/local/bin/pkl 'https://github.com/apple/pkl/releases/download/0.30.2/pkl-linux-amd64' && \
+    chmod +x /usr/local/bin/pkl
+
 # Install Miniconda
 WORKDIR /tmp
 RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh && \
@@ -159,44 +217,34 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -
 ENV PATH=/usr/local/bin:/opt/ros/jazzy/bin:/opt/conda/bin:$PATH
 ENV CONDA_PREFIX=/opt/conda
 
-# Initialize conda for bash
-RUN /opt/conda/bin/conda init bash && \
-    /opt/conda/bin/conda config --set auto_activate_base false
+# Install Pixi and UV package managers
+RUN curl -fsSL https://pixi.sh/install.sh | bash && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Accept Conda Terms of Service for all channels
-RUN /opt/conda/bin/conda tos accept --all-channels || true && \
-    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true && \
-    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true && \
-    /opt/conda/bin/conda update conda -y
-
-# Install PKL (Configuration Language)
-RUN curl -L -o /usr/local/bin/pkl 'https://github.com/apple/pkl/releases/download/0.30.2/pkl-linux-amd64' && \
-    chmod +x /usr/local/bin/pkl
+ENV PATH="/root/.pixi/bin:/root/.cargo/bin:/root/.local/bin:$PATH"
 
 # Cleanup build artifacts
 WORKDIR /
 RUN rm -rf /tmp/pytorch /tmp/vision /tmp/tensorflow /tmp/tensorflow_pkg /tmp/ros2_ws
 
-# Comprehensive verification  
-# Use explicit paths: /usr/local/bin/python3 for PyTorch/TF (Python 3.12.12)
-RUN echo "=== Verifying Source-Built Python 3.12.12 ===" && \
+# Verification
+RUN echo "=== Verifying Python 3.12.12 ===" && \
     /usr/local/bin/python3 --version && \
-    /usr/local/bin/pip3 --version && \
-    echo "" && \
     echo "=== Verifying PyTorch ===" && \
     /usr/local/bin/python3 -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA Available: {torch.cuda.is_available()}'); print(f'CUDA Version: {torch.version.cuda}')" && \
-    echo "" && \
+    echo "=== Verifying TensorRT ===" && \
+    /usr/local/bin/python3 -c "import tensorrt; print(f'TensorRT: {tensorrt.__version__}')" && \
     echo "=== Verifying TensorFlow ===" && \
     /usr/local/bin/python3 -c "import tensorflow as tf; print(f'TensorFlow: {tf.__version__}')" && \
-    echo "" && \
-    echo "=== Verifying Conda ==="  && \
-    /opt/conda/bin/conda --version && \
-    /opt/conda/bin/conda info --envs && \
-    echo "" && \
+    echo "=== Verifying PySide6 ===" && \
+    /usr/local/bin/python3 -c "import PySide6; print(f'PySide6: {PySide6.__version__}')" && \
     echo "=== Verifying PKL ===" && \
     pkl --version && \
-    echo "" && \
+    echo "=== Verifying Conda ===" && \
+    /opt/conda/bin/conda --version && \
+    echo "=== Verifying Pixi/UV ===" && \
+    pixi --version && \
+    uv --version && \
     echo "=== Verifying ROS 2 ===" && \
     bash -c "source /opt/ros/jazzy/setup.bash && ros2 pkg list | head -n 3" && \
-    echo "" && \
     echo "=== All verifications passed ==="

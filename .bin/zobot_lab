@@ -11,15 +11,18 @@ NC='\033[0m'
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
 
+GHCR_BASE="ghcr.io/snknitheesh"
+
 # Default config
 ROS_DISTRO="jazzy"
 CONDA_ENV=""
 BUILD_ONLY=false
+PULL_BUILD=false
 PRUNE_CONTAINER=false
 
 # Show help
 show_help() {
-    echo -e "${CYAN}🤖 Zobot LAB - DevContainer-Based Robotics Development${NC}"
+    echo -e "${CYAN}Zobot LAB - DevContainer-Based Robotics Development${NC}"
     echo ""
     echo -e "${GREEN}Usage:${NC}"
     echo "  zobot_lab [OPTIONS]"
@@ -27,18 +30,20 @@ show_help() {
     echo -e "${GREEN}Options:${NC}"
     echo "  --jazzy               Use ROS Jazzy (default)"
     echo "  --conda <env_name>    Activate conda environment on start"
-    echo "  --build               Build images only, don't run"
-    echo "  --rebuild             Rebuild images from scratch"
-    echo "  --prune               Stop and remove containers and images"
+    echo "  --pull                Pull base image from GHCR, then build overlay"
+    echo "  --build               Build base + overlay images locally"
+    echo "  --rebuild             Rebuild all images from scratch (no cache)"
+    echo "  --prune               Stop and remove containers (keeps images)"
     echo "  --vscode              Open in VS Code (DevContainer)"
     echo "  --help, -h            Show this help message"
     echo ""
     echo -e "${GREEN}Examples:${NC}"
     echo "  zobot_lab                    # Start container with ROS Jazzy"
-    echo "  zobot_lab --build            # Build images"
-    echo "  zobot_lab --rebuild          # Rebuild from scratch"
+    echo "  zobot_lab --pull             # Pull base from GHCR + build overlay"
+    echo "  zobot_lab --build            # Build base + overlay locally"
+    echo "  zobot_lab --rebuild          # Rebuild everything from scratch"
     echo "  zobot_lab --vscode           # Open in VS Code"
-    echo "  zobot_lab --prune            # Remove containers and images"
+    echo "  zobot_lab --prune            # Remove containers"
     echo ""
     echo -e "${CYAN}DevContainer Commands (Alternative):${NC}"
     echo "  code --folder-uri vscode-remote://dev-container+${WORKSPACE_ROOT}/.devcontainer/jazzy/devcontainer.json"
@@ -50,7 +55,7 @@ check_requirements() {
         echo -e "${RED}Error: Docker is not installed${NC}"
         exit 1
     fi
-    
+
     if ! command -v docker compose &> /dev/null; then
         echo -e "${RED}Error: Docker Compose is not installed${NC}"
         exit 1
@@ -59,41 +64,63 @@ check_requirements() {
 
 # Setup environment variables for docker-compose
 setup_env() {
-    # Check for conda directory
-    if [ -d "/mnt/cave/.conda_docker" ] && [ "$(ls -A /mnt/cave/.conda_docker 2>/dev/null)" ]; then
-        export CONDA_MOUNT="/mnt/cave/.conda_docker"
-    else
-        # Create empty directory for mount
-        mkdir -p /tmp/empty 2>/dev/null || true
-        export CONDA_MOUNT="/tmp/empty"
-    fi
-    
     # Ensure conda environments directory exists on host
-    mkdir -p /mnt/cave/.conda_docker 2>/dev/null || true
-    
+    mkdir -p /lake/.conda_docker 2>/dev/null || true
+
+    # Enable BuildKit for layer caching
+    export DOCKER_BUILDKIT=1
+    export COMPOSE_DOCKER_CLI_BUILD=1
+
     # Ensure DISPLAY is set
     export DISPLAY="${DISPLAY:-:0}"
-    
+
     # Set ROS_DOMAIN_ID to 1 (fixed for this container)
     export ROS_DOMAIN_ID=1
 }
 
-# Build images
+# Pull base image from GHCR and build overlay
+pull_and_build() {
+    local distro=$1
+
+    echo -e "${YELLOW}Pulling base image from GHCR...${NC}"
+
+    setup_env
+    cd "$WORKSPACE_ROOT" || exit 1
+
+    if docker pull "${GHCR_BASE}/zobot-lab-${distro}-base:latest"; then
+        echo -e "${GREEN}Base image pulled successfully${NC}"
+    else
+        echo -e "${RED}Failed to pull base image. Are you logged in to ghcr.io?${NC}"
+        echo -e "${YELLOW}  gh auth token | docker login ghcr.io -u snknitheesh --password-stdin${NC}"
+        return 1
+    fi
+
+    # Build overlay on top of pulled base
+    echo -e "${YELLOW}Building overlay image...${NC}"
+    if docker compose --profile "$distro" build "ros2-${distro}"; then
+        echo -e "${GREEN}${distro} overlay image built successfully${NC}"
+    else
+        echo -e "${RED}${distro} overlay image build failed${NC}"
+        return 1
+    fi
+}
+
+# Build both images locally
 build_images() {
     local distro=$1
     local rebuild=${2:-false}
-    
+
     echo -e "${YELLOW}Building images for ${distro}...${NC}"
-    
+
     setup_env
-    
+
     cd "$WORKSPACE_ROOT" || exit 1
-    
+
     local build_args=""
     if [ "$rebuild" = true ]; then
         build_args="--no-cache --pull"
     fi
-    
+
     # Build base image first
     if docker compose --profile build build ${build_args} base-dev; then
         echo -e "${GREEN}Base image built successfully${NC}"
@@ -101,7 +128,7 @@ build_images() {
         echo -e "${RED}Base image build failed${NC}"
         return 1
     fi
-    
+
     # Build overlay image
     if docker compose --profile "$distro" build ${build_args} "ros2-${distro}"; then
         echo -e "${GREEN}${distro} image built successfully${NC}"
@@ -115,33 +142,34 @@ build_images() {
 start_container() {
     local distro=$1
     local conda_env=$2
-    
+
     echo -e "${GREEN}Starting ${distro} container...${NC}"
-    
+
     setup_env
-    
+
     cd "$WORKSPACE_ROOT" || exit 1
-    
+
     # Check if images exist (but don't auto-build)
-    if ! docker image inspect "robotics-dev-base:latest" &> /dev/null; then
+    if ! docker image inspect "${GHCR_BASE}/zobot-lab-${distro}-base:latest" &> /dev/null; then
         echo -e "${RED}Error: Base image not found!${NC}"
-        echo -e "${YELLOW}Please build images first: zobot_lab --build${NC}"
+        echo -e "${YELLOW}Pull it: zobot_lab --pull${NC}"
+        echo -e "${YELLOW}Or build locally: zobot_lab --build${NC}"
         return 1
     fi
-    
-    if ! docker image inspect "robotics-dev:${distro}" &> /dev/null; then
-        echo -e "${RED}Error: ${distro} image not found!${NC}"
-        echo -e "${YELLOW}Please build images first: zobot_lab --build${NC}"
+
+    if ! docker image inspect "zobot-lab-${distro}:latest" &> /dev/null; then
+        echo -e "${RED}Error: Overlay image not found!${NC}"
+        echo -e "${YELLOW}Build it: zobot_lab --pull  (or zobot_lab --build)${NC}"
         return 1
     fi
-    
+
     # Start container in background
     if docker compose --profile "$distro" up -d "ros2-${distro}"; then
         echo -e "${GREEN}Container started${NC}"
-        
+
         # Wait for container to be ready
         sleep 2
-        
+
         # Enter container
         if [ -n "$conda_env" ]; then
             echo -e "${CYAN}Activating conda environment: ${conda_env}${NC}"
@@ -156,17 +184,17 @@ start_container() {
     fi
 }
 
-# Prune containers and images
+# Prune containers
 prune_containers() {
     local distro=$1
-    
-    echo -e "${RED}Pruning ${distro} container and images...${NC}"
-    
+
+    echo -e "${RED}Pruning ${distro} containers...${NC}"
+
     cd "$WORKSPACE_ROOT" || exit 1
-    
+
     # Stop and remove containers using docker compose
     docker compose --profile "$distro" down --remove-orphans
-    
+
     # Also manually stop and remove any orphaned containers with the expected name
     local container_name="ros2-${distro}-dev"
     if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
@@ -174,28 +202,22 @@ prune_containers() {
         docker stop "$container_name" 2>/dev/null || true
         docker rm "$container_name" 2>/dev/null || true
     fi
-    
-    # Remove images
-    if docker image inspect "robotics-dev:${distro}" &> /dev/null; then
-        docker rmi "robotics-dev:${distro}" 2>/dev/null || true
-    fi
-    
-    # Keep base image by default (it's large and takes long to rebuild)
-    # To remove base image manually: docker rmi robotics-dev-base:latest
-    
-    echo -e "${GREEN}Pruning complete${NC}"
-    echo -e "${CYAN}Note: Base image kept (use 'docker rmi robotics-dev-base:latest' to remove manually)${NC}"
-    echo -e "${CYAN}Conda environments are preserved at /mnt/cave/.conda_docker${NC}"
+
+    echo -e "${GREEN}Pruning complete (containers removed, images kept)${NC}"
+    echo -e "${CYAN}To also remove images:${NC}"
+    echo -e "${CYAN}  docker rmi zobot-lab-${distro}:latest${NC}"
+    echo -e "${CYAN}  docker rmi ${GHCR_BASE}/zobot-lab-${distro}-base:latest${NC}"
+    echo -e "${CYAN}Conda environments are preserved at /lake/.conda_docker${NC}"
 }
 
 # Open in VS Code
 open_vscode() {
     local distro=$1
-    
+
     echo -e "${CYAN}Opening in VS Code (${distro})...${NC}"
-    
+
     cd "$WORKSPACE_ROOT" || exit 1
-    
+
     # Open with specific devcontainer config
     if command -v code &> /dev/null; then
         # Use devcontainer CLI or VS Code command palette
@@ -216,6 +238,10 @@ while [[ $# -gt 0 ]]; do
         --conda)
             CONDA_ENV="$2"
             shift 2
+            ;;
+        --pull)
+            PULL_BUILD=true
+            shift
             ;;
         --build)
             BUILD_ONLY=true
@@ -251,6 +277,8 @@ check_requirements
 
 if [ "$PRUNE_CONTAINER" = true ]; then
     prune_containers "$ROS_DISTRO"
+elif [ "$PULL_BUILD" = true ]; then
+    pull_and_build "$ROS_DISTRO"
 elif [ "$BUILD_ONLY" = true ]; then
     build_images "$ROS_DISTRO" "${REBUILD:-false}"
 elif [ "$VSCODE" = true ]; then

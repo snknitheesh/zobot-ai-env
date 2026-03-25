@@ -1,9 +1,9 @@
-FROM robotics-dev-base:latest
+FROM ghcr.io/snknitheesh/zobot-lab-jazzy-base:latest
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG ROS_DISTRO=jazzy
 
-# 1. User setup - Baked into the image for isolation
+# 1. User setup
 ENV USERNAME=zozo
 ENV USER_UID=1000
 ENV USER_GID=1000
@@ -20,47 +20,25 @@ RUN groupdel ubuntu || true && \
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/nopasswd && \
     chmod 0440 /etc/sudoers.d/nopasswd
 
-# 2. System Packages 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        curl wget git vim nano build-essential cmake pkg-config \
-        software-properties-common ca-certificates gnupg lsb-release \
-        sudo openssh-client htop tree unzip rsync \
-        libxcb-cursor0 libxcb-cursor-dev libxcb-xinerama0 libxcb-xinerama0-dev \
-        libxcb-xfixes0 libxcb-xfixes0-dev libxcb-render0 libxcb-render-util0 \
-        libxcb-shape0 libxcb-shape0-dev libxcb-keysyms1 libxcb-keysyms1-dev \
-        libxcb-image0 libxcb-image0-dev libxcb-icccm4 libxcb-icccm4-dev \
-        libxcb-sync1 libxcb-sync-dev libxcb-xkb1 libxcb-xkb-dev \
-        libxkbcommon-x11-0 libxkbcommon-x11-dev libxkbcommon0 libxkbcommon-dev \
-        speech-dispatcher \
-        python3-vcstool python3-colcon-common-extensions python3-rosdep \
-    && curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends gz-harmonic && \
-    rm -rf /var/lib/apt/lists/*
-
-# 3. Pip Requirements
-# Copy only the requirement files first to leverage caching
+# 2. Additional pip requirements
 COPY .requirements/additional_pip_requirements.txt /tmp/additional_pip_requirements.txt
 
-# Install additional pip requirements
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install --upgrade pip setuptools && \
-    pip3 install PySide6 && \
+    --mount=type=cache,target=/root/.cache/uv \
     if [ -s /tmp/additional_pip_requirements.txt ]; then \
         pip3 install -r /tmp/additional_pip_requirements.txt; \
     fi
 
-# 4. Workspace setup and configuration
+# 3. Workspace setup and configuration
 RUN mkdir -p $ZOBOT_WS && \
     mkdir -p /home/zozo/.ros_builds && \
     mkdir -p /home/zozo/mount && \
-    mkdir -p /home/zozo/cave && \
     mkdir -p /home/zozo/.cache/conda-anaconda-tos && \
     mkdir -p /home/zozo/.conda && \
+    mkdir -p /home/zozo/.pixi/bin \
+             /home/zozo/.cargo/bin \
+             /home/zozo/.local/bin \
+             /home/zozo/.config && \
     mkdir -p /opt/ros/ros_ws && \
     chown -R $USERNAME:$USERNAME /home/zozo && \
     chown -R $USERNAME:$USERNAME /opt/ros/ros_ws && \
@@ -74,12 +52,11 @@ COPY --chown=$USERNAME:$USERNAME .bin/ubuntu_bashrc /home/zozo/.bashrc
 COPY .dev/show_packages.sh /usr/local/bin/show_packages.sh
 COPY .dev/docker_entrypoint.sh /usr/local/bin/docker_entrypoint.sh
 
-# Fix paths in bashrc to use /opt/conda instead of /home/zozo/.anaconda
 RUN sed -i 's/\/home\/zozo\/.anaconda/\/opt\/conda/g' /home/zozo/.bashrc && \
     chmod +x /home/zozo/zobot_ws/.bin/*.py /home/zozo/zobot_ws/.bin/ros-mgr /home/zozo/zobot_ws/.bin/req /home/zozo/zobot_ws/.bin/install_qt_dependencies.sh || true && \
     chmod +x /usr/local/bin/show_packages.sh /usr/local/bin/docker_entrypoint.sh
 
-# 5. VCS Import & Build 
+# 4. VCS Import & Build
 USER $USERNAME
 WORKDIR $ZOBOT_WS
 
@@ -89,9 +66,9 @@ RUN if [ -s /tmp/depend.repos ] && [ "$(grep -c '^\s*[^#]' /tmp/depend.repos)" -
         vcs import . < /tmp/depend.repos; \
     fi
 
-# Build imported repos
-RUN if [ -d "/opt/ros/ros_ws" ] && [ "$(find /opt/ros/ros_ws -maxdepth 2 -name "*.xml" -o -name "CMakeLists.txt" -o -name "setup.py" | wc -l)" -gt 0 ]; then \
-        echo "🔨 Building imported repositories..." && \
+RUN --mount=type=cache,target=/home/zozo/.cache/ccache,uid=1000,gid=1000 \
+    if [ -d "/opt/ros/ros_ws" ] && [ "$(find /opt/ros/ros_ws -maxdepth 2 -name "*.xml" -o -name "CMakeLists.txt" -o -name "setup.py" | wc -l)" -gt 0 ]; then \
+        echo "Building imported repositories..." && \
         /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && \
         colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
             --base-paths /opt/ros/ros_ws \
@@ -99,41 +76,26 @@ RUN if [ -d "/opt/ros/ros_ws" ] && [ "$(find /opt/ros/ros_ws -maxdepth 2 -name "
             --install-base /home/zozo/.ros_builds/install"; \
     fi
 
-# 6. Install Pixi and UV package managers
-USER root
-
-# Install for root user
+# 5. Install Pixi and UV for zozo user
 RUN curl -fsSL https://pixi.sh/install.sh | bash && \
     curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Create all necessary directories for zozo user with proper permissions
-RUN mkdir -p /home/zozo/.pixi/bin \
-             /home/zozo/.cargo/bin \
-             /home/zozo/.local/bin \
-             /home/zozo/.config && \
-    chown -R $USERNAME:$USERNAME /home/zozo/.pixi \
-                                  /home/zozo/.cargo \
-                                  /home/zozo/.local \
-                                  /home/zozo/.config
-
-# Install for zozo user
-USER $USERNAME
-RUN curl -fsSL https://pixi.sh/install.sh | bash && \
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Set PATH for both users
-USER root
-ENV PATH="/root/.pixi/bin:/root/.cargo/bin:/root/.local/bin:$PATH"
-
-USER $USERNAME
 ENV PATH="/home/zozo/.pixi/bin:/home/zozo/.cargo/bin:/home/zozo/.local/bin:$PATH"
 
-# Accept Conda Terms of Service for zozo user
-RUN /opt/conda/bin/conda tos accept --all-channels || true && \
-    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true && \
-    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
+# Configure Conda for zozo user
+USER root
+RUN /opt/conda/bin/conda init bash && \
+    /opt/conda/bin/conda config --set auto_activate_base false
 
-# 7. Final Env vars and setup
+# Accept Conda Terms of Service and update
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true && \
+    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true && \
+    /opt/conda/bin/conda update conda -y
+
+USER $USERNAME
+
+# 6. Final env vars
 ENV RCUTILS_CONSOLE_OUTPUT_FORMAT="[{severity}]: {message}"
 ENV RCUTILS_COLORIZED_OUTPUT=1
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -143,13 +105,13 @@ ENV ROS_DISTRO=${ROS_DISTRO}
 ENV ROS_DOMAIN_ID=1
 ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
 
-# Configure ccache for zozo user
 ENV CCACHE_DIR=/home/zozo/.cache/ccache
 ENV CCACHE_MAXSIZE=10G
+USER root
 RUN mkdir -p /home/zozo/.cache/ccache && \
     chown -R $USERNAME:$USERNAME /home/zozo/.cache
+USER $USERNAME
 
-# Source bashrc additions
 RUN echo 'source /home/zozo/zobot_ws/.dev/alias.sh' >> /home/zozo/.bashrc && \
     echo '' >> /home/zozo/.bashrc && \
     echo '# Show packages on interactive shell start (once per container)' >> /home/zozo/.bashrc && \
@@ -158,16 +120,13 @@ RUN echo 'source /home/zozo/zobot_ws/.dev/alias.sh' >> /home/zozo/.bashrc && \
     echo '    /usr/local/bin/show_packages.sh' >> /home/zozo/.bashrc && \
     echo 'fi' >> /home/zozo/.bashrc
 
-# Final verification stage (to be run during build)
+# Final verification
 RUN echo "=== FINAL VERIFICATION ===" && \
-    /usr/local/bin/python3 -c "import torch; import tensorflow; import PySide6; print('AI Frameworks OK')" && \
     /opt/conda/bin/conda --version && \
-    /usr/local/bin/pkl --version && \
     pixi --version && \
     uv --version && \
     /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && ros2 doctor --report | grep 'RMW MIDDLEWARE'" && \
     echo "=== ALL SYSTEMS GO ==="
 
-# Override entrypoint to show packages instead of CUDA version
 ENTRYPOINT ["/usr/local/bin/docker_entrypoint.sh"]
 CMD ["/bin/bash"]
